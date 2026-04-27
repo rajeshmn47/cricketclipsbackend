@@ -1,0 +1,184 @@
+require("dotenv").config();
+var express = require("express");
+const app = express();
+const mongoose = require("mongoose");
+const cors = require("cors");
+var express = require("express");
+const path = require('path');
+const fs = require("fs");
+const bodyParser = require("body-parser");
+const home = require("./controllers/homecontroller");
+const video = require("./controllers/video/videocontroller.js");
+const contest = require("./controllers/contestsController");
+const teamdata = require("./controllers/playerscontroller.js");
+const auth = require("./controllers/user_controller");
+const team = require("./controllers/teamcontroller");
+const apikeys = require("./controllers/apikeysController.js");
+const payments = require("./controllers/paymentcontroller.js");
+const matches = require("./controllers/matchcontroller.js");
+const cryptoContestController = require("./controllers/cryptoContestsController.js");
+const updatedata = require("./updating/updatedata.js");
+const fMatches = require("./controllers/football/fMatchDB-controller.js");
+const player = require("./routes/playerDetails");
+const series = require("./routes/series");
+const admin = require("./controllers/admincontroller.js");
+const tasks = require("./controllers/taskController.js");
+const notif = require("./controllers/notifyplayer.js");
+const clips = require("./controllers/clipscontroller.js");
+const kyc = require("./controllers/kycController.js");
+const notifications = require("./controllers/notificationController.js");
+const { startTransaction } = require("./updating/transaction.js");
+const { addMatchtoDb } = require("./updating/addMatch.js");
+const { addLivescoresDetails } = require("./updating/addlivescoresdetails.js");
+const { addLiveDetails } = require("./updating/addlivedetails.js");
+const { addLivecommentary } = require("./updating/addCommentary.js");
+const { addTeamstandingstodb } = require("./updating/updateteam.js");
+const { addTeamstandingstodbAPI } = require("./updating/updatestandings.js");
+const { addPlayersAPI } = require("./updating/addplayer.js");
+const { addteamPlayers } = require("./updating/teamcreatecontroller.js");
+const { addMatchIds } = require("./updating/addMatchIds.js");
+const { getkeys } = require("./utils/crickeys");
+const { checkloggedinuser, checkloggedinadmin } = require("./utils/checkUser.js");
+const { updateBalls } = require("./updating/updateBalls.js");
+const { addInPlayStatus } = require("./updating/addInPlayStatus.js");
+const { createDefaultContestTypes } = require("./updating/createContestTypes.js");
+const { cronjobs } = require("./updating/cronJobs.js");
+const { startCryptoTransaction } = require("./updating/cryptoTransaction.js");
+const configRoutes = require("./controllers/configurationController.js");
+const { addLivecommentaryCustom } = require("./updating/addCommentaryCustom.js");
+const { addLivescoresDetailsCustomfs } = require("./updating/addScoredetailsCustom.js");
+const { addLivescoresDetailsCustom } = require("./updating/addlivescoresdetailskeys.js");
+const { updateSeries } = require("./updating/addSeries.js");
+const { updateSquads } = require("./updating/updateSquads.js");
+//const { generateShotTypes } = require("./generate_shottype.js");
+const { fetchAndSaveTeams } = require("./updating/createTeams.js");
+const { addMatchesForAllCurrentSeries } = require("./updating/addMatchFromSeries.js");
+const { addLiveDetailsFS } = require("./updating/addlivedetailsFS.js");
+const { updateSeriesArchives } = require("./updating/addSeriesArchives.js");
+const Clip = require("./models/clips.js");
+const { default: axios } = require("axios");
+const { addInPlayStatusFS } = require("./updating/addInPlayStatusFS.js");
+const { generateLabels } = require("./helperfunctions/generateLabels.js");
+const { addingkeys } = require("./helperfunctions/addingkeys.js");
+const { addPlayerHands } = require("./helperfunctions/updateClips.js");
+const { updatePlayers } = require("./helperfunctions/updatePlayers.js");
+const { writeMatchesToSheet } = require("./helperfunctions/writeMatchesForClips.js");
+const { addLivecommentaryMongo } = require("./updating/addCommentaryMongo.js");
+const { updatePlayerNames } = require("./helperfunctions/updatePlayerNames.js");
+const { updateMatchIDs } = require("./helperfunctions/updateMatchIDs.js");
+const { runPipeline } = require("./updating/generateClips.js");
+const { createMatchesList } = require("./helperfunctions/createMatches.js");
+const { addSeriesIdToClips } = require("./helperfunctions/addseriestoclips.js");
+const { generatePendingTasks } = require("./updating/generatePendingTasks.js");
+const { updateplayernameinclips } = require("./helperfunctions/updatePlayerNameInclips.js");
+const { generateLabelsAllMatches } = require("./helperfunctions/generatelabelsall.js");
+const { generateLabelsMatch } = require("./helperfunctions/generateLabels_match");
+const { updatePlayerNamesInClips } = require("./helperfunctions/renameclipsnames.js");
+const { updatematchliveseriesids, findingkeeper } = require("./helperfunctions/excercise.js");
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(cors({ origin: "*", credentials: false }));
+app.use('/images', express.static(path.join('images')));
+app.use('/mockvideos', express.static(path.join('sachinshots')));
+app.use('/mockvideos', express.static(path.join('allvideos')));
+app.use('/mockvideos', (req, res, next) => {
+  res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+  next();
+}, express.static(path.join('D:/compressed_240p')));
+app.use('/mockvideos', express.static(path.join('../dream11/CricketShotClassification/allclips')));
+app.use('/mockvideos', express.static(path.join("D:/fango11/fango11/allclips")));
+app.use('/mockvideos', express.static(path.join("D:/cricketvideos/allclips_india")));
+app.use('/mockvideos', express.static(path.join("D:/cricketvideos/allclips")));
+app.use('/mockvideos', express.static(path.join("D:/cricketvideos/iplclips")));
+app.use('/highlights', express.static(path.join('public/final_videos')));
+app.use('/', video);
+app.use("/auth", auth);
+app.use("/clips", clips);
+app.use("/", player);
+app.use("/", series);
+app.use("/admin", checkloggedinuser, admin)
+app.use("/payment", checkloggedinuser, payments);
+app.use("/cryptocontest", checkloggedinuser, cryptoContestController);
+app.use("/", checkloggedinuser, home);
+app.use("/", checkloggedinuser, contest);
+app.use("/", checkloggedinuser, teamdata);
+app.use("/", checkloggedinuser, team);
+app.use("/apikeys", checkloggedinuser, apikeys);
+app.use("/", checkloggedinuser, updatedata);
+app.use("/api/match", checkloggedinuser, matches);
+app.use("/kyc", checkloggedinuser, kyc);
+app.use("/notifications", checkloggedinuser, notifications)
+app.use("/api/config", configRoutes);
+app.use("/notify", checkloggedinuser, notif);
+app.use("/tasks", checkloggedinuser, tasks);
+//app.use("/", transaction);
+mongoose.Promise = global.Promise;
+mongoose.connect(
+  process.env.uri,
+  { useNewUrlParser: true, useUnifiedTopology: true },
+  (error) => {
+    if (error) {
+      console.log(`Error!${error}`);
+    }
+    else {
+      console.log('connected to database')
+    }
+  }
+);
+
+// excercise();
+// updatePlayerNamesInClips()
+// addMatchesForAllCurrentSeries()
+// writeMatchesToSheet()
+// cronjobs()
+// createDefaultContestTypes()
+// addMatchtoDb();
+// addLiveDetails();
+// addLivePlayers();
+// addLivescoresDetails();
+// addMatchIds();
+// addTeamstandingstodb();
+// addteamPlayers();
+// addTeamstandingstodbAPI();
+// addPlayersAPI();
+// startTransaction();
+// addLivecommentary();
+// addLivecommentaryCustom('t20');
+// addLivescoresDetailsCustom('very_high')
+// addingkeys()
+// addLivescoresDetailsCustomfs('test')
+// updateBalls();
+// updatePlayers()
+// addInPlayStatus()
+// startCryptoTransaction();
+// updateSeries()
+// updateSquads()
+// generateShotTypes()
+// fetchAndSaveTeams();
+// addLiveDetails()
+// updateSeriesArchives()
+// addMissingPlayers()
+// addInPlayStatus()
+// fetchAndSaveTeams()
+// generateLabels() 
+// updateplayernameinclips()
+// startTransaction()
+// addPlayerHands()
+// addLivecommentaryMongo('t20')
+// updatePlayerNames()
+// updatePlayers()
+// fetchAndSaveTeams()
+// updateMatchIDs()
+// runPipeline()
+// addSeriesIdToClips()
+// generatePendingTasks()
+// generateLabelsAllMatches()
+// generateLabelsMatch("149768")
+// updatematchliveseriesids()
+findingkeeper()
+
+const PORT = process.env.PORT || 8000;
+app.listen(PORT, () => {
+  console.warn(`App listening on http://localhost:${PORT}`);
+});

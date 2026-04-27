@@ -1,0 +1,401 @@
+[
+    {
+        "teamName": "India",
+        "short": "IND",
+        "jerseyColor": "Blue"
+    },
+    {
+        "teamName": "Australia",
+        "short": "AUS",
+        "jerseyColor": "Yellow"
+    },
+    {
+        "teamName": "England",
+        "jerseyColor": "Blue",
+        "short": "ENG"
+    },
+    {
+        "teamName": "Pakistan",
+        "short": "Pak",
+        "jerseyColor": "Green"
+    },
+    {
+        "teamName": "South Africa",
+        "jerseyColor": "Green",
+        "short": "RSA"
+    },
+    {
+        "teamName": "New Zealand",
+        "short": "NZ",
+        "jerseyColor": "Black"
+    },
+    {
+        "teamName": "Sri Lanka",
+        "jerseyColor": "Blue",
+        "short": "SL"
+    },
+    {
+        "teamName": "Bangladesh",
+        "jerseyColor": "Green",
+        "short": "BAN"
+    },
+    {
+        "teamName": "West Indies",
+        "jerseyColor": "Maroon",
+        "short": "WI"
+    },
+    {
+        "teamName": "Afghanistan",
+        "jerseyColor": "Blue",
+        "short": "AFG"
+    },
+    {
+        "teamName": "Zimbabwe",
+        "jerseyColor": "Red",
+        "short": "ZIM"
+    },
+    {
+        "team": "Chennai Super Kings",
+        "jerseyColor": "Yellow",
+        "short": "CSK"
+    },
+    {
+        "team": "Mumbai Indians",
+        "jerseyColor": "Blue",
+        "short": "MI"
+    },
+    {
+        "team": "Royal Challengers Bangalore",
+        "jerseyColor": "Red",
+        "short": "RCB"
+    },
+    {
+        "team": "Kolkata Knight Riders",
+        "jerseyColor": "Purple",
+        "short": "KKR"
+    },
+    {
+        "team": "Rajasthan Royals",
+        "jerseyColor": "Pink",
+        "short": "RR"
+    },
+    {
+        "team": "Delhi Capitals",
+        "jerseyColor": "Blue",
+        "short": "DC"
+    },
+    {
+        "team": "Sunrisers Hyderabad",
+        "jerseyColor": "Orange",
+        "short": "SRH"
+    },
+    {
+        "team": "Lucknow Super Giants",
+        "jerseyColor": "Light Blue",
+        "short": "LSG"
+    },
+    {
+        "team": "Gujarat Titans",
+        "jerseyColor": "Dark Blue",
+        "short": "GT"
+    },
+    {
+        "team": "Karachi Kings",
+        "jerseyColor": "Blue",
+        "short": "KK"
+    },
+    {
+        "team": "Lahore Qalandars",
+        "jerseyColor": "Green",
+        "short": "LQ"
+    },
+    {
+        "team": "Peshawar Zalmi",
+        "jerseyColor": "Yellow",
+        "short": "PZ"
+    },
+    {
+        "team": "Islamabad United",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Quetta Gladiators",
+        "jerseyColor": "Purple",
+        "short": "QG"
+    },
+    {
+        "team": "Multan Sultans",
+        "jerseyColor": "Green",
+        "short": "MS"
+    },
+    {
+        "team": "MI New York",
+        "jerseyColor": "Blue",
+        "short": "MINY"
+    },
+    {
+        "team": "San Francisco Unicorns",
+        "jerseyColor": "Navy",
+        "short": "SFU"
+    },
+    {
+        "team": "Seattle Orcas",
+        "jerseyColor": "Green",
+        "short": "SOC"
+    },
+    {
+        "team": "Washington Freedom",
+        "jerseyColor": "Red",
+        "short": "WAF"
+    },
+    {
+        "team": "Texas Super Kings",
+        "jerseyColor": "Yellow",
+        "short": "TSK"
+    },
+    {
+        "team": "Los Angeles Knight Riders",
+        "jerseyColor": "Purple",
+        "short": "LAKR"
+    },
+    {
+        "team": "Birmingham Phoenix",
+        "jerseyColor": "Orange"
+    },
+    {
+        "team": "London Spirit",
+        "jerseyColor": "Blue"
+    },
+    {
+        "team": "Manchester Originals",
+        "jerseyColor": "Purple"
+    },
+    {
+        "team": "Northern Superchargers",
+        "jerseyColor": "Purple"
+    },
+    {
+        "team": "Oval Invincibles",
+        "jerseyColor": "Green"
+    },
+    {
+        "team": "Southern Brave",
+        "jerseyColor": "Yellow"
+    },
+    {
+        "team": "Trent Rockets",
+        "jerseyColor": "Orange"
+    },
+    {
+        "team": "Welsh Fire",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Joburg Super Kings",
+        "jerseyColor": "Yellow",
+        "short": "JSK"
+    },
+    {
+        "team": "Pretoria Capitals",
+        "jerseyColor": "Blue",
+        "short": "PC"
+    },
+    {
+        "team": "Cape Town Samp Army",
+        "jerseyColor": "Green"
+    },
+    {
+        "team": "Durban's Super Giants",
+        "jerseyColor": "Blue",
+        "short": "DSG"
+    },
+    {
+        "team": "MI Cape Town",
+        "jerseyColor": "Blue",
+        "short": "MICT"
+    },
+    {
+        "team": "Paarl Royals",
+        "jerseyColor": "Pink",
+        "short": "PR"
+    },
+    {
+        "team": "Sunrisers Eastern Cape",
+        "jerseyColor": "Orange",
+        "short": "SEC"
+    },
+    {
+        "team": "Barbados Royals",
+        "jerseyColor": "Blue",
+        "short": "BR"
+    },
+    {
+        "team": "Guyana Amazon Warriors",
+        "jerseyColor": "Green",
+        "short": "GAW"
+    },
+    {
+        "team": "Jamaica Tallawahs",
+        "short": "JT",
+        "jerseyColor": "Yellow"
+    },
+    {
+        "team": "Saint Lucia Kings",
+        "short": "SLK",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Trinbago Knight Riders",
+        "short": "TKR",
+        "jerseyColor": "Black"
+    },
+    {
+        "team": "St Kitts & Nevis Patriots",
+        "short": "SNP",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Nepal",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "United Arab Emirates",
+        "jerseyColor": "White",
+        "short": "UAE"
+    },
+    {
+        "team": "Scotland",
+        "jerseyColor": "Blue"
+    },
+    {
+        "team": "Ireland",
+        "jerseyColor": "Green"
+    },
+    {
+        "team": "Netherlands",
+        "jerseyColor": "Orange"
+    },
+    {
+        "team": "Papua New Guinea",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Oman",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "USA",
+        "jerseyColor": "Blue",
+        "short": "USA"
+    },
+    {
+        "team": "Canada",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Hong Kong",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Kenya",
+        "jerseyColor": "Green"
+    },
+    {
+        "team": "Namibia",
+        "jerseyColor": "Blue"
+    },
+    {
+        "team": "Singapore",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Malaysia",
+        "jerseyColor": "Blue"
+    },
+    {
+        "team": "Thailand",
+        "jerseyColor": "Blue"
+    },
+    {
+        "team": "Jersey",
+        "jerseyColor": "Red"
+    },
+    {
+        "team": "Guernsey",
+        "jerseyColor": "Green"
+    },
+    {
+        "team": "Cayman Islands",
+        "jerseyColor": "Blue"
+    },
+    {
+        "team": "Abu Dhabi Knight Riders",
+        "jerseyColor": "Purple",
+        "short": "ADKR"
+    },
+    {
+        "team": "Desert Vipers",
+        "jerseyColor": "Green",
+        "short": "DV"
+    },
+    {
+        "team": "Dubai Capitals",
+        "jerseyColor": "Blue",
+        "short": "DC"
+    },
+    {
+        "team": "Gulf Giants",
+        "jerseyColor": "Orange",
+        "short": "GG"
+    },
+    {
+        "team": "MI Emirates",
+        "jerseyColor": "Blue",
+        "short": "MIE"
+    },
+    {
+        "team": "Sharjah Warriors",
+        "jerseyColor": "Yellow",
+        "short": "SW"
+    },
+    {
+        "team": "Sydney Sixers",
+        "jerseyColor": "Magenta",
+        "short": "SYS"
+    },
+    {
+        "team": "Sydney Thunder",
+        "jerseyColor": "Lime Green",
+        "short": "SYT"
+    },
+    {
+        "team": "Melbourne Stars",
+        "jerseyColor": "Green",
+        "short": "MLS"
+    },
+    {
+        "team": "Melbourne Renegades",
+        "jerseyColor": "Red",
+        "short": "MLR"
+    },
+    {
+        "team": "Brisbane Heat",
+        "jerseyColor": "Teal",
+        "short": "BRH"
+    },
+    {
+        "team": "Adelaide Strikers",
+        "jerseyColor": "Blue",
+        "short": "ADS"
+    },
+    {
+        "team": "Perth Scorchers",
+        "jerseyColor": "Orange",
+        "short": "PRS"
+    },
+    {
+        "team": "Hobart Hurricanes",
+        "jerseyColor": "Purple",
+        "short": "HBH"
+    }
+]

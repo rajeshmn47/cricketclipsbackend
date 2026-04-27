@@ -1,0 +1,311 @@
+{
+  "shotType": {
+    "cut": [
+      "cut it off",
+      "cuts it off",
+      "cutting it off",
+      "relcutantly",
+      "cut that off",
+      "by Cutting",
+      "cut him some slack",
+      "cut loose",
+      "cute",
+      "upper cut",
+      "cut him in",
+      "cut short",
+      "upper-cut",
+      "cut the angle",
+      "cut back",
+      "cut down",
+      "consecutive",
+      "off-cutter",
+      "off cutter",
+      "offcutter",
+      "leg-cutter",
+      "legcutter",
+      "leg cutter",
+      "cutter",
+      "cut this down",
+      "cutting into him",
+      "cutting in",
+      "execution",
+      "cutter",
+      "cut off the angle",
+      "cut off the off-side",
+      "cut off",
+      "cuts loose",
+      "cut this off",
+      "cuts this off",
+      "cutting this off",
+      "cutting to",
+      "to cutting",
+      "from cutting",
+      "french-cut",
+      "french cut",
+      "cutters",
+      "executed",
+      "execute",
+      "executes",
+      "executing",
+      "cut it down",
+      "leg-cutting",
+      "leg cutting",
+      "cutting across",
+      "cut the boundary off",
+      "cuts the angle",
+      "cuts off the angle",
+      "consecutive",
+      "by cutting"
+    ],
+    "pull": [
+      "pull off",
+      "muscle pull",
+      "pulls his length back",
+      "pulled his length back",
+      "pulls the length back",
+      "pulled the length back",
+      "pulling the length back",
+      "pulled off",
+      "pulls his length",
+      "pulling things back",
+      "pulling off",
+      "pull this off",
+      "pulls this off",
+      "pull that off",
+      "pulled it off",
+      "pulls it off",
+      "pulls off",
+      "pull it off",
+      "pulled back length",
+      "pull things back",
+      "pulls off a blinder",
+      "length pulled back",
+      "pulls off a fine catch",
+      "pull it back in",
+      "pull it back",
+      "pull the ball back",
+      "pulled it back in",
+      "pulling it back in",
+      "pulls off a gem",
+      "pulls the length back",
+      "pulled the ball back in",
+      "pulling the ball back in",
+      "pull the ball back in",
+      "pulls the ball back in"
+    ],
+    "flick": [
+      "probably flick",
+      "flicked the glove",
+      "flicks it back in",
+      "flicking it back in",
+      "flick it back at the stumps",
+      "flicks his fingers",
+      "flick it back",
+      "ball flicks it"
+    ],
+    "ramp_shot": [
+      "cramp"
+    ],
+    "sweep": [
+      "reverse sweep",
+      "switch hit",
+      "reverse hit",
+      "reverse-hit",
+      "reverse-sweep",
+      "sweeper"
+    ],
+    "scoop": [
+      "reverse scoop",
+      "reverse-scoop",
+      "scooped a fine catch",
+      "scoop of butter",
+      "scooped it up"
+    ],
+    "cover_drive": [
+      "cover point",
+      "cover-point",
+      "ground to cover",
+      "area to cover",
+      "covered",
+      "he had it covered",
+      "recovering",
+      "Recover"
+    ],
+    "glance": [
+      "had a glance",
+      "quick glance"
+    ]
+  },
+  "direction": {
+    "point": [
+      "point of impact",
+      "bowled at around this point",
+      "disappointed",
+      "points his palm",
+      "disappointment",
+      "point of view",
+      "pointing his bat",
+      "point of contact",
+      "no point",
+      "pointing"
+    ],
+    "cover": [
+      "cover point",
+      "cover-point",
+      "ground to cover",
+      "area to cover",
+      "covered",
+      "he had it covered",
+      "recovering",
+      "doesn't cover"
+    ],
+    "mid_off": [
+      "back over the bowler's head"
+    ],
+    "mid_on": [
+      "just wide of the non-striker"
+    ],
+    "long_on": [
+      "No chance for long-on",
+      "long one"
+    ],
+    "long_off": [
+      "over the bowler's head"
+    ],
+    "mid_wicket": [],
+    "square_leg": [],
+    "fine_leg": [
+      "deep fine leg"
+    ],
+    "slip": [
+      "slipped down",
+      "slips through",
+      "slip through",
+      "slip further",
+      "slip further down",
+      "slip out of his",
+      "slip away",
+      "after a slip",
+      "slip under",
+      "slips in the",
+      "let it slip",
+      "slip deeper",
+      "slips it",
+      "slipping"
+    ]
+  },
+  "ballType": {},
+  "lengthType": {
+    "good_length": [
+      "short of a good length",
+      "shorter than good length",
+      "fuller length",
+      "full length",
+      "short of length",
+      "short of a length"
+    ],
+    "full_length": [
+      "full length dive",
+      "stretch full length "
+    ],
+    "yorker": [
+      "full toss",
+      "full-toss",
+      "just misses the mark",
+      "misses by a long margin",
+      "very full",
+      "not quite yorker length",
+      "misses his yorker",
+      "misses the yorker",
+      "misses the blockhole",
+      "undercooked the yorker",
+      "miss the yorker",
+      "missed yorker",
+      "yorker missed",
+      "yorker is missed",
+      "msses his yorker",
+      "undercook",
+      "went for a yorker, misses it",
+      "tries a yorker but misses it",
+      "didn't really miss his yorker by much here",
+      "doesn't quite nail the yorker",
+      "overpitched ball",
+      "falls short of the mark",
+      "it's not a yorker",
+      "but misses by a few inches",
+      "missed his mark",
+      "missed his yorker",
+      "looks for the yorker and misses",
+      "went for the hard length",
+      "tries a wide yorker but fails to keep it inside the marker",
+      "misses the wide yorker",
+      "missed the yorker",
+      "The yorker is missed",
+      "missed it by a long way",
+      "attempted yorker",
+      "couldn't land the yorker",
+      "can't get his yorker right",
+      "erred with the yorker",
+      "wasn't quite the yorker",
+      "slot ball",
+      "in the slot",
+      "in the arc",
+      "offered slot",
+      "half-volley",
+      "half volley",
+      "missed his length",
+      "missed his mark",
+      "misses by a few inches",
+      "misses by a few cms",
+      "missed the length",
+      "short of his mark",
+      "does not get it right",
+      "but just missed it",
+      "not close to yorker length"
+    ]
+  },
+  "lofted": {
+    "lofted": [
+      "uijvuisfjuiji"
+    ]
+  },
+  "connection": {
+    "edge": [
+      "leading edge",
+      "leading-edge",
+      "thick inside edge",
+      "thick inside-edge",
+      "top edge",
+      "top-edge",
+      "bottom edge",
+      "bottom-edge",
+      "outside edge",
+      "outside-edge",
+      "inside edge",
+      "inside-edge",
+      "edge of the circle"
+    ],
+    "well_timed": [
+      "not timed well",
+      "not timed very well",
+      "never timed well",
+      "hasn't middled",
+      "Wasn't timed well",
+      "mistimes",
+      "Wasn't a great shot",
+      "Fails to connect",
+      "not right off the middle",
+      "timing is such that it's gone all the way"
+    ],
+    "inside_edge": [
+      "gets beaten on the inside edge",
+      "turns in past the inside edge",
+      "beaten on the inside edge",
+      "sneaks past the inside edge"
+    ],
+    "outside_edge": [
+      "beats the outside edge",
+      "sneak past the outside edge"
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+const mongoose = require("mongoose");
+const Contest = require("../models/contest");
+const Team = require("../models/team");
+const MatchLive = require("../models/matchlive");
+const User = require("../models/user");
+const express = require("express");
+const { messaging } = require("../utils/firebaseinitialize");
+const Transaction = require("../models/transaction");
+
+// function prizeBreakupRules(prize, numWinners){
+//     let prizeMoneyBreakup = [];
+//     for(let i = 0; i < numWinners; i++){
+
+//     }
+// }
+module.exports.startTransaction = async function () {
+  let date = new Date();
+  const endDate = new Date(date.getTime() + 24 * 60 * 60 * 1000 * 2);
+  date = new Date(date.getTime() - 340 * 60 * 60 * 1000 * 2);
+  const matches = await MatchLive.find({
+    date: {
+      $gte: new Date(date),
+      $lt: new Date(endDate),
+    },
+  });
+  console.log(matches.length, "matches");
+  for (let i = 0; i < matches.length; i++) {
+    if (matches[i].result == "Complete") {
+      console.log('transacting')
+      const contests = await Contest.find({ matchId: matches[i].matchId });
+      for (let k = 0; k < contests.length; k++) {
+        let teams = [];
+        contests[k].teamsId = contests[k].teamsId.filter((t) => t);
+        if (contests[k]?.teamsId?.length) {
+          for (let j = 0; j < contests[k].teamsId.length; j++) {
+            if (mongoose.Types.ObjectId.isValid(contests[k].teamsId[j])) {
+              const team = await Team.findById(contests[k].teamsId[j]);
+              teams.push(team);
+            }
+          }
+          function compare(a, b) {
+            if (a.points < b.points) {
+              return -1;
+            }
+            if (a.points > b.points) {
+              return 1;
+            }
+            return 0;
+          }
+        }
+        teams = teams.sort(compare);
+        for (let j = 0; j < contests[k].prizeDetails.length; j++) {
+          if (teams.length > 0 && teams[j]?.userId) {
+            const user = await User.findById(teams[j].userId);
+            //console.log(user, "user");
+            user.wallet += contests[k].prizeDetails[j].prize;
+            await Transaction.create({
+              userId: user?._id,
+              amount: contests[k].prizeDetails[j].prize,
+              action: "winnings",
+              status: "completed",
+              transactionId: contests[k]._id
+            });
+            user.totalAmountWon += contests[k].prizeDetails[j].prize;
+            try {
+              await user.save();
+              if (user?.fcmtoken) {
+                const message = {
+                  notification: {
+                    title: "Congratulations!",
+                    body: `You won ₹${contests[k].prizeDetails[j].prize}! Check your wallet for details.`,
+                  },
+                  token: user.fcmtoken,
+                };
+                console.log(user?.fcmtoken, user?.username, 'sendng')
+                await messaging.send(message)
+              }
+              //matches[i].transaction = true;
+              //await matches.save();
+              const matchUpdate = await MatchLive.updateOne(
+                { matchId: matches[i]?.matchId },
+                {
+                  $set: {
+                    transaction: true,
+                  },
+                }
+              );
+            } catch (e) {
+              console.log(e);
+            }
+          }
+        }
+      }
+    }
+  }
+};
