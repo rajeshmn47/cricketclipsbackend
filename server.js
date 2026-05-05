@@ -26,6 +26,7 @@ const tasks = require("./controllers/taskController.js");
 const notif = require("./controllers/notifyplayer.js");
 const clips = require("./controllers/clipscontroller.js");
 const kyc = require("./controllers/kycController.js");
+const analytics = require("./controllers/analyticsController.js");
 const notifications = require("./controllers/notificationController.js");
 const { startTransaction } = require("./updating/transaction.js");
 const { addMatchtoDb } = require("./updating/addMatch.js");
@@ -112,6 +113,7 @@ app.use("/notifications", checkloggedinuser, notifications)
 app.use("/api/config", configRoutes);
 app.use("/notify", checkloggedinuser, notif);
 app.use("/tasks", checkloggedinuser, tasks);
+app.use("/api/analytics", checkloggedinuser, analytics);
 //app.use("/", transaction);
 mongoose.Promise = global.Promise;
 mongoose.connect(
@@ -173,10 +175,10 @@ mongoose.connect(
 // runPipeline()
 // addSeriesIdToClips()
 // generatePendingTasks()
-// generateLabelsAllMatches()
+generateLabelsAllMatches()
 // generateLabelsMatch("149768")
 // updatematchliveseriesids()
-findingkeeper()
+// findingkeeper()
 
 const PORT = process.env.PORT || 8000;
 app.listen(PORT, () => {

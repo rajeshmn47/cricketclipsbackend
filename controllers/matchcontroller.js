@@ -4,6 +4,7 @@ const Team = require("../models/team");
 const User = require("../models/user");
 const Match = require("../models/match");
 const MatchLive = require("../models/matchlive");
+const Clip = require("../models/clips"); // adjust the path as needed
 const { getkeys } = require("../utils/crickeys");
 const { isInPlay } = require("../utils/isInPlay");
 const Series = require("../models/series");
@@ -17,6 +18,8 @@ const flagURLs = require("country-flags-svg");
 const { squadkeys } = require("../utils/apikeys");
 const { makeRequest, generateMatchHashtags } = require("../utils/helpers");
 const MatchLiveDetails = require("../models/matchlive");
+const cricketSynonyms = require('./../utils/cricket_synonyms.json');
+const exclusionMap = require('./../utils/exclusion_map.json');
 
 function convertWicketsData(wicketsData) {
     return Object.keys(wicketsData).map(key => wicketsData[key]);
@@ -191,10 +194,10 @@ router.get("/series/all", async (req, res) => {
     try {
         // Fetch all series
         const series = await Series.find({});
-        
+
         // Fetch all squads (we only need seriesId and keeperPriority)
         const squads = await Squad.find({}, { seriesId: 1, keeperPriority: 1 });
-        
+
         // Build map: seriesId -> count of squads missing primary keeper
         const missingCountMap = new Map();
         for (const squad of squads) {
@@ -204,7 +207,7 @@ router.get("/series/all", async (req, res) => {
                 missingCountMap.set(seriesId, (missingCountMap.get(seriesId) || 0) + 1);
             }
         }
-        
+
         // Attach missingPrimaryCount to each series object
         const seriesWithCounts = series.map(s => {
             const seriesId = s.seriesId; // assuming Series model has a 'seriesId' field (number)
@@ -213,7 +216,7 @@ router.get("/series/all", async (req, res) => {
                 missingPrimaryCount: missingCountMap.get(seriesId) || 0
             };
         });
-        
+
         res.status(200).json(seriesWithCounts);
     } catch (error) {
         console.error(error);
@@ -368,39 +371,39 @@ router.put("/squads/:id", async (req, res) => {
 });
 
 router.put("/squad/:id", async (req, res) => {
-  const { keeperPriority, players, teamId, seriesId, teamName } = req.body;
-  try {
-    // 1. Update the squad
-    const updatedSquad = await Squad.findByIdAndUpdate(
-      req.params.id,
-      { teamId, seriesId, teamName, players, keeperPriority: keeperPriority || [] },
-      { new: true, runValidators: true }
-    );
+    const { keeperPriority, players, teamId, seriesId, teamName } = req.body;
+    try {
+        // 1. Update the squad
+        const updatedSquad = await Squad.findByIdAndUpdate(
+            req.params.id,
+            { teamId, seriesId, teamName, players, keeperPriority: keeperPriority || [] },
+            { new: true, runValidators: true }
+        );
 
-    if (!updatedSquad) {
-      return res.status(404).json({ message: "Squad not found" });
+        if (!updatedSquad) {
+            return res.status(404).json({ message: "Squad not found" });
+        }
+
+        // 2. Get the primary wicketkeeper (first in priority)
+        const primaryKeeperId = (keeperPriority && keeperPriority[0]) || null;
+
+        if (primaryKeeperId) {
+            // 3. Update all matches in this series where this team is home or away
+            await MatchLiveDetails.updateMany(
+                { seriesId: seriesId, teamHomeId: teamId },
+                { $set: { teamHomeKeeperPlayerId: primaryKeeperId } }
+            );
+            await MatchLiveDetails.updateMany(
+                { seriesId: seriesId, teamAwayId: teamId },
+                { $set: { teamAwayKeeperPlayerId: primaryKeeperId } }
+            );
+        }
+
+        res.json({ message: "Squad updated and matches synced", squad: updatedSquad });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
     }
-
-    // 2. Get the primary wicketkeeper (first in priority)
-    const primaryKeeperId = (keeperPriority && keeperPriority[0]) || null;
-
-    if (primaryKeeperId) {
-      // 3. Update all matches in this series where this team is home or away
-      await MatchLiveDetails.updateMany(
-        { seriesId: seriesId, teamHomeId: teamId },
-        { $set: { teamHomeKeeperPlayerId: primaryKeeperId } }
-      );
-      await MatchLiveDetails.updateMany(
-        { seriesId: seriesId, teamAwayId: teamId },
-        { $set: { teamAwayKeeperPlayerId: primaryKeeperId } }
-      );
-    }
-
-    res.json({ message: "Squad updated and matches synced", squad: updatedSquad });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
 });
 
 // Delete Squad
@@ -1077,16 +1080,13 @@ router.get("/lineup/:matchId", async (req, res) => {
     try {
         const { matchId } = req.params;
 
-        // Fetch match document and convert to plain object (removes Mongoose magic)
         const matchDoc = await MatchLiveDetails.findOne({ matchId: String(matchId) });
         if (!matchDoc) {
             return res.status(404).json({ message: "Match not found" });
         }
 
-        // Convert to plain object
         const match = matchDoc.toObject();
 
-        // Helper: clean player array and detect wicketkeeper candidates
         const cleanPlayers = (players) => {
             if (!Array.isArray(players)) return [];
             const wkRegex = /wk|wicket.?keeper|keeper.?batsman|\(wk\)|†/i;
@@ -1095,7 +1095,6 @@ router.get("/lineup/:matchId", async (req, res) => {
                 playerName: p.playerName || "",
                 position: p.position || "",
                 image: p.image || "",
-                // Add any other fields you need (runs, wickets, etc.)
                 isCandidate: wkRegex.test(p.position || "") || wkRegex.test(p.playerName || "")
             }));
         };
@@ -1104,7 +1103,7 @@ router.get("/lineup/:matchId", async (req, res) => {
         const homePlayers = cleanPlayers(match.teamHomePlayers);
         const homeTeamObj = {
             teamId: match.teamHomeId,
-            teamName: match.teamHomeName || match.teamHomeId, // use stored name or fallback to ID
+            teamName: match.teamHomeName || match.teamHomeId,
             players: homePlayers,
             currentKeeperId: match.teamHomeKeeperPlayerId || null,
             currentKeeper: null,
@@ -1122,21 +1121,16 @@ router.get("/lineup/:matchId", async (req, res) => {
             currentKeeperOverride: !!match.teamAwayKeeperPlayerId
         };
 
-        // Find current keeper objects (from the cleaned players)
+        // ONLY use stored keeper - NO FALLBACK
         if (homeTeamObj.currentKeeperId) {
-            homeTeamObj.currentKeeper = homePlayers.find(p => p.playerId === homeTeamObj.currentKeeperId);
+            homeTeamObj.currentKeeper = homePlayers.find(p => p.playerId === homeTeamObj.currentKeeperId) || null;
         }
         if (awayTeamObj.currentKeeperId) {
-            awayTeamObj.currentKeeper = awayPlayers.find(p => p.playerId === awayTeamObj.currentKeeperId);
+            awayTeamObj.currentKeeper = awayPlayers.find(p => p.playerId === awayTeamObj.currentKeeperId) || null;
         }
 
-        // Fallback: if no keeper set, pick first candidate (or first player)
-        if (!homeTeamObj.currentKeeper) {
-            homeTeamObj.currentKeeper = homePlayers.find(p => p.isCandidate) || homePlayers[0] || null;
-        }
-        if (!awayTeamObj.currentKeeper) {
-            awayTeamObj.currentKeeper = awayPlayers.find(p => p.isCandidate) || awayPlayers[0] || null;
-        }
+        // REMOVE the fallback that assigns arbitrary players
+        // Keepers will remain null if not set in database
 
         res.status(200).json({
             matchId: match.matchId,
@@ -1751,6 +1745,606 @@ router.get("/update_to_live/:matchId", async (req, res) => {
         catch (error) {
             console.log(error)
         }
+    }
+});
+
+/**
+ * GET /api/analytics/dismissals
+ * Query parameters (all optional):
+ *   - batsman    : string, case‑insensitive partial match on batsman name
+ *   - seriesId   : string, exact match
+ *   - season     : string, exact match (e.g., "2025")
+ *   - format     : string, exact match (e.g., "t20", "odi", "test")
+ *   - bowlerType : string, exact match (e.g., "pace", "spin")
+ *
+ * Returns:
+ *   [
+ *     {
+ *       "batsman": "Virat Kohli",
+ *       "counts": { "bowled": 3, "caught": 12, "lbw": 2, ... },
+ *       "total": 17
+ *     },
+ *     ...
+ *   ]
+ */
+router.get("/dismissals", async (req, res) => {
+    try {
+        const { batsman, seriesId, season, format, bowlerType } = req.query;
+
+        // Build the $match conditions
+        const matchConditions = {
+            "labels.wicketType": { $exists: true, $ne: null },
+        };
+        if (seriesId) matchConditions.seriesId = seriesId;
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (bowlerType) matchConditions.bowlerType = bowlerType;
+        if (batsman) {
+            matchConditions.batsman = { $regex: batsman, $options: "i" };
+        }
+
+        const pipeline = [
+            { $match: matchConditions },
+            {
+                $group: {
+                    _id: {
+                        batsman: "$batsman",
+                        wicketType: "$labels.wicketType",
+                    },
+                    count: { $sum: 1 },
+                },
+            },
+            {
+                $group: {
+                    _id: "$_id.batsman",
+                    dismissals: {
+                        $push: { wicketType: "$_id.wicketType", count: "$count" },
+                    },
+                },
+            },
+            {
+                $project: {
+                    batsman: "$_id",
+                    counts: {
+                        $arrayToObject: {
+                            $map: {
+                                input: "$dismissals",
+                                as: "d",
+                                in: { k: "$$d.wicketType", v: "$$d.count" },
+                            },
+                        },
+                    },
+                    total: { $sum: "$dismissals.count" },
+                },
+            },
+            { $sort: { total: -1 } }, // highest total first
+        ];
+
+        const result = await Clip.aggregate(pipeline);
+        res.json(result);
+    } catch (error) {
+        console.error("Error in /dismissals:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// GET /api/analytics/matches-with-lineup-analysis
+router.get("/matches-with-lineup-analysis", async (req, res) => {
+    const matchIdsWithClips = await Clip.distinct("matchId");
+    const matches = await MatchLiveDetails.find({
+        matchId: { $in: matchIdsWithClips }
+    });
+
+    const isKeeper = (player) => /wk|wicket.?keeper|keeper.?batsman|\(wk\)|†/i.test(player.position || '') || /wk|wicket.?keeper|keeper.?batsman|\(wk\)|†/i.test(player.playerName || '');
+
+    const result = matches.map(m => {
+        const homePlayers = m.teamHomePlayers || [];
+        const awayPlayers = m.teamAwayPlayers || [];
+        const homeCandidates = homePlayers.filter(isKeeper);
+        const awayCandidates = awayPlayers.filter(isKeeper);
+        const hasHomeKeeperInLineup = homeCandidates.length > 0;
+        const hasAwayKeeperInLineup = awayCandidates.length > 0;
+        const hasHomeAssigned = m.teamHomeKeeperPlayerId != null;
+        const hasAwayAssigned = m.teamAwayKeeperPlayerId != null;
+        const hasMismatch = (hasHomeKeeperInLineup && !hasHomeAssigned) || (hasAwayKeeperInLineup && !hasAwayAssigned);
+
+        return {
+            matchId: m.matchId,
+            seriesId: m.seriesId,
+            homePlayers,
+            awayPlayers,
+            homeCandidates,
+            awayCandidates,
+            hasHomeKeeperInLineup,
+            hasAwayKeeperInLineup,
+            hasHomeAssigned,
+            hasAwayAssigned,
+            teamHomeKeeperPlayerId: m.teamHomeKeeperPlayerId,
+            teamAwayKeeperPlayerId: m.teamAwayKeeperPlayerId,
+            currentHomeKeeperName: homeCandidates.find(p => p.playerId === m.teamHomeKeeperPlayerId)?.playerName,
+            currentAwayKeeperName: awayCandidates.find(p => p.playerId === m.teamAwayKeeperPlayerId)?.playerName,
+            hasMismatch,
+        };
+    });
+
+    res.json(result);
+});
+
+// PUT /api/analytics/update-player-position
+router.put("/update-player-position", async (req, res) => {
+    const { matchId, team, playerId, position } = req.body;
+    const updateField = team === "home" ? "teamHomePlayers" : "teamAwayPlayers";
+    const match = await MatchLiveDetails.findOne({ matchId });
+    const players = match[updateField];
+    const playerIndex = players.findIndex(p => p.playerId === playerId);
+    if (playerIndex !== -1) {
+        players[playerIndex].position = position;
+        await MatchLiveDetails.updateOne({ matchId }, { $set: { [updateField]: players } });
+    }
+    res.json({ success: true });
+});
+
+// POST /api/analytics/auto-fix-keeper
+router.post("/auto-fix-keeper", async (req, res) => {
+    const { matchId } = req.body;
+    const match = await MatchLiveDetails.findOne({ matchId });
+    const isKeeper = (player) => /wk|wicket.?keeper|keeper.?batsman|\(wk\)|†/i.test(player.position || '') || /wk|wicket.?keeper|keeper.?batsman|\(wk\)|†/i.test(player.playerName || '');
+
+    const homeCandidates = (match.teamHomePlayers || []).filter(isKeeper);
+    const awayCandidates = (match.teamAwayPlayers || []).filter(isKeeper);
+
+    const updates = {};
+    if (homeCandidates.length && !match.teamHomeKeeperPlayerId) updates.teamHomeKeeperPlayerId = homeCandidates[0].playerId;
+    if (awayCandidates.length && !match.teamAwayKeeperPlayerId) updates.teamAwayKeeperPlayerId = awayCandidates[0].playerId;
+
+    await MatchLiveDetails.updateOne({ matchId }, { $set: updates });
+    res.json({ success: true, updates });
+});
+
+// GET /api/match/bowlers-dismissals
+router.get("/bowlers-dismissals", async (req, res) => {
+    try {
+        const { bowler, seriesId, season, format, bowlerType } = req.query;
+
+        // Build match conditions
+        const matchConditions = {
+            "labels.wicketType": { $exists: true, $ne: null }
+        };
+        if (seriesId) matchConditions.seriesId = seriesId;
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (bowlerType) matchConditions.bowlerType = bowlerType;
+        if (bowler) matchConditions.bowler = { $regex: bowler, $options: "i" };
+
+        const pipeline = [
+            { $match: matchConditions },
+            {
+                $group: {
+                    _id: {
+                        bowler: "$bowler",
+                        wicketType: "$labels.wicketType"
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $group: {
+                    _id: "$_id.bowler",
+                    dismissals: {
+                        $push: { wicketType: "$_id.wicketType", count: "$count" }
+                    },
+                    bowlerType: { $first: "$bowlerType" }
+                }
+            },
+            {
+                $project: {
+                    bowler: "$_id",
+                    counts: {
+                        $arrayToObject: {
+                            $map: {
+                                input: "$dismissals",
+                                as: "d",
+                                in: { k: "$$d.wicketType", v: "$$d.count" }
+                            }
+                        }
+                    },
+                    bowlerType: 1,
+                    total: { $sum: "$dismissals.count" }
+                }
+            },
+            { $sort: { total: -1 } }
+        ];
+
+        const result = await Clip.aggregate(pipeline);
+        res.json(result);
+    } catch (error) {
+        console.error("Error in bowlers-dismissals:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Add this to your routes file (e.g., routes/analytics.js or routes/match.js)
+
+/**
+ * GET /api/analytics/bowler-batsman-rivalry
+ * Query parameters (all optional):
+ *   - seriesId    : string, filter by series ID
+ *   - season      : string, filter by season (e.g., "2026")
+ *   - format      : string, filter by format (t20, odi, test)
+ *   - minDismissals : number, minimum dismissals to include (default: 1)
+ *   - bowler      : string, filter by bowler name (optional)
+ *   - batsman     : string, filter by batsman name (optional)
+ * 
+ * Returns:
+ *   [
+ *     {
+ *       bowler: "Jasprit Bumrah",
+ *       batsman: "Andre Russell",
+ *       count: 12,
+ *       wicketTypes: {
+ *         bowled: 3,
+ *         caught: 7,
+ *         lbw: 2,
+ *         stumped: 0,
+ *         runout: 0,
+ *         caught_bowled: 0
+ *       }
+ *     },
+ *     ...
+ *   ]
+ */
+router.get("/bowler-batsman-rivalry", async (req, res) => {
+    try {
+        const {
+            seriesId,
+            season,
+            format,
+            league,
+            minDismissals = 1,
+            bowler,
+            batsman
+        } = req.query;
+
+        // Build match conditions
+        const matchConditions = {
+            "labels.wicketType": { $exists: true, $ne: null },
+            bowler: { $exists: true, $ne: null, $ne: "" },
+            batsman: { $exists: true, $ne: null, $ne: "" }
+        };
+
+        if (seriesId) matchConditions.seriesId = seriesId;
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (league) matchConditions.league = { $regex: new RegExp(`^${league}$`, 'i') };
+        if (bowler) matchConditions.bowler = { $regex: bowler, $options: "i" };
+        if (batsman) matchConditions.batsman = { $regex: batsman, $options: "i" };
+
+        const pipeline = [
+            // Step 1: Filter clips
+            { $match: matchConditions },
+
+            // Step 2: Group by bowler and batsman pair
+            {
+                $group: {
+                    _id: {
+                        bowler: "$bowler",
+                        batsman: "$batsman"
+                    },
+                    count: { $sum: 1 },
+                    wicketTypes: { $push: "$labels.wicketType" }
+                }
+            },
+
+            // Step 3: Filter by minimum dismissals
+            { $match: { count: { $gte: parseInt(minDismissals) } } },
+
+            // Step 4: Calculate breakdown of wicket types
+            {
+                $project: {
+                    bowler: "$_id.bowler",
+                    batsman: "$_id.batsman",
+                    count: 1,
+                    wicketTypes: {
+                        bowled: {
+                            $size: {
+                                $filter: {
+                                    input: "$wicketTypes",
+                                    as: "w",
+                                    cond: { $eq: ["$$w", "bowled"] }
+                                }
+                            }
+                        },
+                        caught: {
+                            $size: {
+                                $filter: {
+                                    input: "$wicketTypes",
+                                    as: "w",
+                                    cond: { $in: ["$$w", ["caught", "caught_bowled"]] }
+                                }
+                            }
+                        },
+                        lbw: {
+                            $size: {
+                                $filter: {
+                                    input: "$wicketTypes",
+                                    as: "w",
+                                    cond: { $eq: ["$$w", "lbw"] }
+                                }
+                            }
+                        },
+                        stumped: {
+                            $size: {
+                                $filter: {
+                                    input: "$wicketTypes",
+                                    as: "w",
+                                    cond: { $eq: ["$$w", "stumped"] }
+                                }
+                            }
+                        },
+                        runout: {
+                            $size: {
+                                $filter: {
+                                    input: "$wicketTypes",
+                                    as: "w",
+                                    cond: { $eq: ["$$w", "runout"] }
+                                }
+                            }
+                        },
+                        caught_bowled: {
+                            $size: {
+                                $filter: {
+                                    input: "$wicketTypes",
+                                    as: "w",
+                                    cond: { $eq: ["$$w", "caught_bowled"] }
+                                }
+                            }
+                        },
+                        hitwicket: {
+                            $size: {
+                                $filter: {
+                                    input: "$wicketTypes",
+                                    as: "w",
+                                    cond: { $eq: ["$$w", "hitwicket"] }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+
+            // Step 5: Sort by count (highest first)
+            { $sort: { count: -1 } }
+        ];
+
+        const result = await Clip.aggregate(pipeline);
+        res.json(result);
+
+    } catch (error) {
+        console.error("Error in /bowler-batsman-rivalry:", error);
+        res.status(500).json({
+            error: "Internal server error",
+            message: error.message
+        });
+    }
+});
+
+// GET /api/match/batting-weakness - Works with partial data
+router.get("/batting-weakness", async (req, res) => {
+    try {
+        const {
+            seriesId,
+            season,
+            format,
+            league,
+            batsman,
+            bowlerType,
+            minDismissals = 2,
+            type = "lengthType"
+        } = req.query;
+
+        // Build match conditions for WICKET events
+        const matchConditions = {
+            event: "WICKET",
+            batsman: { $exists: true, $ne: null, $ne: "" }
+        };
+
+        if (seriesId) matchConditions.seriesId = seriesId;
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (league) matchConditions.league = league;
+        if (batsman) matchConditions.batsman = { $regex: batsman, $options: "i" };
+        if (bowlerType) matchConditions.bowlerType = bowlerType;
+
+        // Determine which field to analyze - DON'T filter out missing fields
+        let fieldPath;
+        if (type === "lengthType") {
+            fieldPath = "$labels.lengthType";
+        } else if (type === "direction") {
+            fieldPath = "$labels.direction";
+        } else if (type === "bowlerType") {
+            fieldPath = "$bowlerType";
+        } else {
+            fieldPath = "$labels.lengthType";
+        }
+
+        const pipeline = [
+            { $match: matchConditions },
+            {
+                $group: {
+                    _id: {
+                        batsman: "$batsman",
+                        weakness: { $ifNull: [fieldPath, "unknown"] }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $group: {
+                    _id: "$_id.batsman",
+                    weaknesses: {
+                        $push: { type: "$_id.weakness", count: "$count" }
+                    },
+                    total: { $sum: "$count" }
+                }
+            },
+            { $match: { total: { $gte: parseInt(minDismissals) } } },
+            {
+                $project: {
+                    batsman: "$_id",
+                    counts: {
+                        $arrayToObject: {
+                            $map: {
+                                input: "$weaknesses",
+                                as: "w",
+                                in: { k: "$$w.type", v: "$$w.count" }
+                            }
+                        }
+                    },
+                    total: 1
+                }
+            },
+            { $sort: { total: -1 } }
+        ];
+
+        const result = await Clip.aggregate(pipeline);
+
+        // If no results and type is ballType, suggest trying lengthType
+        if (result.length === 0 && type === "ballType") {
+            console.log("No ball type data found. Try using lengthType instead.");
+        }
+
+        res.json(result);
+
+    } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/analytics/boundaries-by-area
+// GET /api/analytics/boundaries-by-area
+router.get("/boundaries-by-area", async (req, res) => {
+    try {
+        const { batsman, seriesId, season, format, league, bowlerType, bowlerHand } = req.query;
+
+        const matchConditions = {
+            batsman: { $exists: true, $ne: null, $ne: "" },
+            event: { $regex: /BOUNDARY|FOUR|SIX/i },
+            "labels.direction": { $exists: true, $ne: null, $ne: "" }
+        };
+
+        if (batsman) matchConditions.batsman = { $regex: batsman, $options: "i" };
+        if (seriesId) matchConditions.seriesId = seriesId;
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (league) matchConditions.league = league;
+        if (bowlerType) matchConditions.bowlerType = bowlerType;
+        if (bowlerHand) matchConditions.bowlingHand = bowlerHand;
+
+        // Load direction synonyms from your JSON file
+        const directionSynonyms = cricketSynonyms.direction || {};
+
+        // Build reverse mapping: all synonym variations -> main category
+        const directionMap = {};
+        for (const [category, synonyms] of Object.entries(directionSynonyms)) {
+            // Add the main category name itself
+            directionMap[category.toLowerCase()] = category;
+            // Add all synonyms
+            if (Array.isArray(synonyms)) {
+                for (const syn of synonyms) {
+                    directionMap[syn.toLowerCase()] = category;
+                }
+            }
+        }
+
+        const pipeline = [
+            { $match: matchConditions },
+            {
+                $addFields: {
+                    isSix: { $regexMatch: { input: { $toLower: "$event" }, regex: "six" } },
+                    isFour: { $regexMatch: { input: { $toLower: "$event" }, regex: "four" } },
+                    directionLower: { $toLower: "$labels.direction" },
+                    // Map direction to category using your synonyms
+                    mappedCategory: {
+                        $let: {
+                            vars: {
+                                matchedCategory: {
+                                    $getField: {
+                                        field: { $toLower: "$labels.direction" },
+                                        input: directionMap
+                                    }
+                                }
+                            },
+                            in: { $ifNull: ["$$matchedCategory", "other"] }
+                        }
+                    }
+                }
+            },
+            // Group and project (same as before, but use mappedCategory)
+            {
+                $group: {
+                    _id: {
+                        batsman: "$batsman",
+                        area: "$mappedCategory",
+                        isSix: "$isSix"
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        batsman: "$_id.batsman",
+                        area: "$_id.area"
+                    },
+                    fours: { $sum: { $cond: [{ $eq: ["$_id.isSix", false] }, "$count", 0] } },
+                    sixes: { $sum: { $cond: ["$_id.isSix", "$count", 0] } },
+                    totalBoundaries: { $sum: "$count" }
+                }
+            },
+            {
+                $group: {
+                    _id: "$_id.batsman",
+                    areas: { $push: { area: "$_id.area", fours: "$fours", sixes: "$sixes", totalBoundaries: "$totalBoundaries" } },
+                    totalBoundaries: { $sum: "$totalBoundaries" },
+                    totalFours: { $sum: "$fours" },
+                    totalSixes: { $sum: "$sixes" }
+                }
+            },
+            {
+                $project: {
+                    batsman: "$_id",
+                    totalBoundaries: 1,
+                    totalFours: 1,
+                    totalSixes: 1,
+                    totalRuns: { $add: [{ $multiply: ["$totalFours", 4] }, { $multiply: ["$totalSixes", 6] }] },
+                    areas: {
+                        $map: {
+                            input: "$areas",
+                            as: "area",
+                            in: {
+                                area: "$$area.area",
+                                fours: "$$area.fours",
+                                sixes: "$$area.sixes",
+                                totalBoundaries: "$$area.totalBoundaries",
+                                totalRuns: { $add: [{ $multiply: ["$$area.fours", 4] }, { $multiply: ["$$area.sixes", 6] }] },
+                                percentageOfBoundaries: {
+                                    $round: [{ $multiply: [{ $divide: ["$$area.totalBoundaries", "$totalBoundaries"] }, 100] }, 1]
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            { $sort: { totalBoundaries: -1 } }
+        ];
+
+        const result = await Clip.aggregate(pipeline);
+        res.json(result);
+
+    } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ error: error.message });
     }
 });
 

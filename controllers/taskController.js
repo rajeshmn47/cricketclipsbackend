@@ -10,6 +10,7 @@ const { generateLabelsMatch } = require("../helperfunctions/generateLabels_match
 const { addPlayerHandsMatch } = require("../helperfunctions/updateClips_match");
 const { moveTodayClips } = require("../utils/helpers");
 const Config = require("../models/config");
+const { findingmatchkeeper } = require("../helperfunctions/findingmatchkeeper");
 
 const router = express.Router();
 
@@ -251,6 +252,7 @@ router.get("/insertClips/:matchId", async (req, res) => {
         await Clip.insertMany(JSON.parse(commentary));
         await generateLabelsMatch(req.params.matchId);
         await addPlayerHandsMatch(req.params.matchId);
+        await findingmatchkeeper(req.params.matchId, true);
         await moveTodayClips();
         res.json({ message: "Clips inserted successfully" });
     } catch (err) {

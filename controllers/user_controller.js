@@ -1589,7 +1589,7 @@ router.post('/merge', async (req, res) => {
   }
 
   const tempFileList = path.join(__dirname, '../temp_file_list.txt');
-  const videoDir = 'D:\\cricketvideos\\iplclips';
+  const videoDir = 'D:\\cricketvideos\\allclips';
 
   // Create FFmpeg input list file
   const listContent = files.map(file => `file '${path.join(videoDir, file)}'`).join('\n');
@@ -1627,7 +1627,7 @@ router.post('/merge-clips', async (req, res) => {
   }
 
   const tempFileList = path.join(__dirname, '../temp_file_list.txt');
-  const videoDir = 'D:\\cricketvideos\\iplclips';
+  const videoDir = 'D:\\cricketvideos\\allclips';
 
   // Create FFmpeg input list file
   const listContent = files.map(file => `file '${path.join(videoDir, file)}'`).join('\n');

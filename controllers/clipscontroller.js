@@ -26,11 +26,193 @@ router.post("/create", async (req, res) => {
 });
 
 // ✅ READ all clips
-router.get("/allclips", async (req, res) => {
+router.get("/allclipss", async (req, res) => {
     try {
         const clips = await Clip.find().sort({ createdAt: 1 });
         res.json(clips);
     } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /all_clips?search=&batsman=&bowler=&matchType=&series=&shotType=&direction=&page=1&limit=10&sort=desc
+router.get("/allclips", async (req, res) => {
+    try {
+        const {
+            search = "",
+            batsman,
+            bowler,
+            event,
+            matchType,
+            league,
+            type,
+            format,
+            series,
+            batting_team,
+            bowling_team,
+            battingHand,
+            bowlingHand,
+            bowlerType,
+            wicketType,
+            season,
+            shotType,
+            direction,
+            ballType,
+            lengthType,
+            connection,
+            slowball,
+            lofted,
+            comesDown,
+            powerplay,
+            isCleanBowled,
+            isLBW,
+            isStumping,
+            isRunout,
+            isCatch,
+            shotElevation,
+            variation,
+            // Flag filters
+            isFlagged,
+            flagReason,
+            reviewStatus,
+            conflictField,
+            // Other filters
+            isDropped,
+            droppedBy,
+            runOutBy,
+            catchBy,
+            caughtBy,
+            stumpedBy,
+            page = 1,
+            limit = 20,
+            sort = "desc",
+        } = req.query;
+
+        console.log(req.query, 'query');
+
+        // Build filter dynamically
+        const filter = {};
+
+        // 🔍 Text search across multiple fields (including labels)
+        if (search) {
+            filter.$or = [
+                { event: { $regex: search, $options: "i" } },
+                { commentary: { $regex: search, $options: "i" } },
+                { subEvent: { $regex: search, $options: "i" } },
+                { batsman: { $regex: search, $options: "i" } },
+                { bowler: { $regex: search, $options: "i" } },
+                { batting_team: { $regex: search, $options: "i" } },
+                { bowling_team: { $regex: search, $options: "i" } },
+                { series: { $regex: search, $options: "i" } },
+                { matchType: { $regex: search, $options: "i" } },
+                { "labels.shotType": { $regex: search, $options: "i" } },
+                { "labels.direction": { $regex: search, $options: "i" } },
+                { "labels.ballType": { $regex: search, $options: "i" } },
+                { "labels.lengthType": { $regex: search, $options: "i" } },
+                { "labels.connection": { $regex: search, $options: "i" } },
+                { "labels.slowball": { $regex: search, $options: "i" } },
+                { "labels.comesDown": { $regex: search, $options: "i" } },
+                { "labels.powerplay": { $regex: search, $options: "i" } },
+            ];
+        }
+
+        // 🎯 Field-based filters
+        if (event) filter.event = { $regex: event, $options: "i" };
+        if (batsman) filter.batsman = { $regex: batsman, $options: "i" };
+        if (bowler) filter.bowler = { $regex: bowler, $options: "i" };
+        if (league) filter.league = { $regex: league, $options: "i" };
+        if (matchType) filter.matchType = matchType;
+        if (type) filter.type = type;
+        if (format) filter.format = format;
+        if (variation) filter["labels.variation"] = variation;
+        if (series) filter.series = { $regex: series, $options: "i" };
+        if (season) filter.season = { $regex: season, $options: "i" };
+        if (batting_team) filter.batting_team = { $regex: batting_team, $options: "i" };
+        if (bowling_team) filter.bowling_team = { $regex: bowling_team, $options: "i" };
+        if (battingHand) filter.battingHand = { $regex: battingHand, $options: "i" };
+        if (bowlingHand) filter.bowlingHand = { $regex: bowlingHand, $options: "i" };
+        if (bowlerType) filter.bowlerType = { $regex: bowlerType, $options: "i" };
+
+        // Labels filters
+        if (shotType) filter["labels.shotType"] = { $regex: `^${shotType}$`, $options: "i" };
+        if (direction) filter["labels.direction"] = { $regex: direction, $options: "i" };
+        if (ballType) filter["labels.ballType"] = { $regex: ballType, $options: "i" };
+        if (lengthType) filter["labels.lengthType"] = { $regex: lengthType, $options: "i" };
+        if (connection) filter["labels.connection"] = { $regex: connection, $options: "i" };
+        if (slowball) filter["labels.slowball"] = { $regex: slowball, $options: "i" };
+        if (comesDown) filter["labels.comesDown"] = { $regex: comesDown, $options: "i" };
+        if (powerplay) filter["labels.powerplay"] = { $regex: powerplay, $options: "i" };
+        if (shotElevation) filter["labels.shotElevation"] = { $regex: shotElevation, $options: "i" };
+
+        // Boolean filter for lofted
+        if (lofted !== undefined && lofted !== "") filter["labels.lofted"] = lofted === "true";
+
+        // Flag filters
+        if (isFlagged !== undefined && isFlagged !== "") {
+            filter["flag.isFlagged"] = isFlagged === "true";
+        }
+        if (flagReason) filter["flag.reason"] = flagReason;
+        if (reviewStatus) filter["flag.reviewStatus"] = reviewStatus;
+        if (conflictField) filter["flag.conflictFields"] = conflictField;
+
+        // Wicket type filters
+        const wicketTypeFilters = [];
+        if (isCleanBowled === "true") wicketTypeFilters.push({ "labels.wicketType": "bowled" });
+        if (isCleanBowled === "false") wicketTypeFilters.push({ "labels.wicketType": { $ne: "bowled" } });
+        if (isLBW === "true") wicketTypeFilters.push({ "labels.wicketType": "lbw" });
+        if (isLBW === "false") wicketTypeFilters.push({ "labels.wicketType": { $ne: "lbw" } });
+        if (isStumping === "true") wicketTypeFilters.push({ "labels.wicketType": "stumped" });
+        if (isStumping === "false") wicketTypeFilters.push({ "labels.wicketType": { $ne: "stumped" } });
+        if (isRunout === "true") wicketTypeFilters.push({ "labels.wicketType": "runout" });
+        if (isRunout === "false") wicketTypeFilters.push({ "labels.wicketType": { $ne: "runout" } });
+        if (isCatch === "true") wicketTypeFilters.push({ "labels.wicketType": "caught" });
+        if (isCatch === "false") wicketTypeFilters.push({ "labels.wicketType": { $ne: "caught" } });
+        if (wicketType) wicketTypeFilters.push({ "labels.wicketType": wicketType });
+
+        if (wicketTypeFilters.length === 1) {
+            Object.assign(filter, wicketTypeFilters[0]);
+        } else if (wicketTypeFilters.length > 1) {
+            filter.$and = wicketTypeFilters;
+        }
+
+        // Dropped/Catch/Runout/Stumped filters
+        if (isDropped !== undefined && isDropped !== "") filter["labels.dropped"] = isDropped === "true";
+        if (droppedBy) filter["labels.droppedBy"] = { $regex: droppedBy, $options: "i" };
+        if (isRunout !== undefined && isRunout !== "") filter["labels.runout"] = isRunout === "true";
+        if (runOutBy) filter["labels.runoutBy"] = { $regex: runOutBy, $options: "i" };
+        if (isCatch !== undefined && isCatch !== "") filter["labels.catch"] = isCatch === "true";
+        if (catchBy) filter["labels.catchBy"] = { $regex: catchBy, $options: "i" };
+        if (caughtBy) filter["labels.catchBy"] = { $regex: caughtBy, $options: "i" };
+        if (stumpedBy) filter["labels.stumpedBy"] = { $regex: stumpedBy, $options: "i" };
+
+        // Event-based filters (WICKET, FOUR, SIX, etc.)
+        if (event) {
+            filter.event = { $regex: event, $options: "i" };
+        }
+
+        // Pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const sortOrder = sort === "asc" ? 1 : -1;
+
+        // Fetch clips
+        const clips = await Clip.find(filter)
+            .sort({ createdAt: sortOrder })
+            .skip(skip)
+            .limit(parseInt(limit));
+
+        // Total count for pagination
+        const total = await Clip.countDocuments(filter);
+
+        res.json({
+            success: true,
+            total,
+            page: parseInt(page),
+            limit: parseInt(limit),
+            totalPages: Math.ceil(total / limit),
+            clips,
+        });
+    } catch (err) {
+        console.error(err);
         res.status(500).json({ error: err.message });
     }
 });
