@@ -27,6 +27,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: false,
     },
+    appType: {
+      type: String,
+      enum: ['dream11', 'cricketclips'],
+      default: 'dream11'
+    },
     totalhits: {
       type: Number,
       required: true,

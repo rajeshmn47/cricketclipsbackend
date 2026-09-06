@@ -192,43 +192,38 @@ router.delete("/deletematch/:matchId", async (req, res) => {
 
 router.get("/series/all", async (req, res) => {
     try {
-        // Fetch all series
-        const series = await Series.find({});
+        const { league, player } = req.query;
 
-        // Fetch all squads (we only need seriesId and keeperPriority)
-        const squads = await Squad.find({}, { seriesId: 1, keeperPriority: 1 });
+        // Build query for Series
+        const seriesQuery = {};
 
-        // Build map: seriesId -> count of squads missing primary keeper
-        const missingCountMap = new Map();
-        for (const squad of squads) {
-            const seriesId = squad.seriesId;
-            const isMissing = !squad.keeperPriority || squad.keeperPriority.length === 0;
-            if (isMissing) {
-                missingCountMap.set(seriesId, (missingCountMap.get(seriesId) || 0) + 1);
+        // League filter (case‑insensitive)
+        if (league && league !== 'all') {
+            seriesQuery.league = { $regex: new RegExp(`^${league}$`, 'i') };
+        }
+        console.log(player, 'player');
+
+        // Player filter – restrict to series where the player has played
+        if (player && player !== '') {
+            const matchSeriesIds = await MatchLiveDetails.distinct("seriesId", {
+                $or: [
+                    { "teamHomePlayers.playerId": player },
+                    { "teamAwayPlayers.playerId": player }
+                ]
+            });
+            if (!matchSeriesIds.length) {
+                return res.status(200).json([]);
             }
+            seriesQuery.seriesId = { $in: matchSeriesIds };
         }
 
-        // Attach missingPrimaryCount to each series object
-        const seriesWithCounts = series.map(s => {
-            const seriesId = s.seriesId; // assuming Series model has a 'seriesId' field (number)
-            return {
-                ...s.toObject(),
-                missingPrimaryCount: missingCountMap.get(seriesId) || 0
-            };
-        });
+        // Fetch series with sorting
+        const series = await Series.find(seriesQuery)
+            .sort({ startDate: -1, seriesId: 1 });   // newest first, then seriesId ascending
 
-        res.status(200).json(seriesWithCounts);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Error fetching series", error });
-    }
-});
-
-router.get("/series/all", async (req, res) => {
-    try {
-        const series = await Series.find({});
         res.status(200).json(series);
     } catch (error) {
+        console.error(error);
         res.status(500).json({ message: "Error fetching series", error });
     }
 });
@@ -1767,9 +1762,10 @@ router.get("/update_to_live/:matchId", async (req, res) => {
  *     ...
  *   ]
  */
+
 router.get("/dismissals", async (req, res) => {
     try {
-        const { batsman, seriesId, season, format, bowlerType } = req.query;
+        const { batsman, seriesId, season, format, bowlerType, league } = req.query;  // ← added league
 
         // Build the $match conditions
         const matchConditions = {
@@ -1779,6 +1775,7 @@ router.get("/dismissals", async (req, res) => {
         if (season) matchConditions.season = season;
         if (format) matchConditions.format = format;
         if (bowlerType) matchConditions.bowlerType = bowlerType;
+        if (league) matchConditions.league = league;        // ← NEW
         if (batsman) {
             matchConditions.batsman = { $regex: batsman, $options: "i" };
         }
@@ -1817,7 +1814,7 @@ router.get("/dismissals", async (req, res) => {
                     total: { $sum: "$dismissals.count" },
                 },
             },
-            { $sort: { total: -1 } }, // highest total first
+            { $sort: { total: -1 } },
         ];
 
         const result = await Clip.aggregate(pipeline);

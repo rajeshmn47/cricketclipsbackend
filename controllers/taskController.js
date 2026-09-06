@@ -76,6 +76,8 @@ router.get("/alltasks", async (req, res) => {
         const page = parseInt(req.query.page) > 0 ? parseInt(req.query.page) : 1;
         const limit = parseInt(req.query.limit) > 0 ? parseInt(req.query.limit) : 20;
         const skip = (page - 1) * limit;
+        const teamHomeName = req.query.teamHomeName;
+        const teamAwayName = req.query.teamAwayName;
 
         console.log(req.query, 'query params')
 
@@ -83,6 +85,12 @@ router.get("/alltasks", async (req, res) => {
         const filter = {};
         if (req.query.status) {
             filter.status = req.query.status;
+        }
+        if (teamHomeName) {
+            filter.teamHomeName = teamHomeName;
+        }
+        if (teamAwayName) {
+            filter.teamAwayName = teamAwayName;
         }
 
         // If series filter is provided, find matchIds for that series
@@ -306,6 +314,59 @@ router.get("/cookies", async (req, res) => {
         res.json({ cookies: config.cookies });
     } catch (err) {
         res.status(500).json({ error: err.message });
+    }
+});
+
+
+// GET /tasks/generate-ignore-teams
+router.get("/generate-ignore-teams", async (req, res) => {
+    try {
+        // 1. Teams that have clips (safe)
+        const matchIdsWithClips = await Clip.distinct("matchId");
+        const matchesWithClips = await Match.find({ matchId: { $in: matchIdsWithClips } }).lean();
+        const teamsWithClips = new Set();
+        for (const m of matchesWithClips) {
+            if (m.teamHomeName) teamsWithClips.add(m.teamHomeName.toLowerCase());
+            if (m.teamAwayName) teamsWithClips.add(m.teamAwayName.toLowerCase());
+        }
+
+        // 2. Teams from finished tasks with missing videoLink
+        const matchIdsFromFailedTasks = await Task.distinct("matchId", {
+            videoLink: { $in: [null, "", undefined] },
+            status: "finished"
+        });
+        const matchesFromFailedTasks = await Match.find({ matchId: { $in: matchIdsFromFailedTasks } }).lean();
+        const teamsFromFailedTasks = new Set();
+        for (const m of matchesFromFailedTasks) {
+            if (m.teamHomeName) teamsFromFailedTasks.add(m.teamHomeName.toLowerCase());
+            if (m.teamAwayName) teamsFromFailedTasks.add(m.teamAwayName.toLowerCase());
+        }
+
+        // 3. Ignore = teams from failed tasks that are NOT in teamsWithClips
+        const ignoreTeams = [];
+        for (const team of teamsFromFailedTasks) {
+            if (!teamsWithClips.has(team)) {
+                ignoreTeams.push(team);
+            }
+        }
+
+        // 4. Write to config/ignoreTeams.json
+        const configDir = path.join(__dirname, "./config");
+        if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true });
+        const filePath = path.join(configDir, "ignoreTeams.json");
+        fs.writeFileSync(filePath, JSON.stringify(ignoreTeams, null, 2), "utf8");
+
+        res.json({
+            success: true,
+            message: `Ignore list updated with ${ignoreTeams.length} teams`,
+            teamsWithClips: teamsWithClips.size,
+            teamsFailed: teamsFromFailedTasks.size,
+            ignoreCount: ignoreTeams.length,
+            ignoreTeams
+        });
+    } catch (err) {
+        console.error("Error generating ignore list:", err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

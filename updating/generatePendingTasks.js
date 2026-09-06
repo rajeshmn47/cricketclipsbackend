@@ -1,25 +1,56 @@
 const Task = require("../models/task");
 const Match = require("../models/match");
 const MatchLive = require("../models/matchlive");
+const fs = require("fs");
+const path = require("path");
 
-/**
- * This script finds matches that are completed (status: "Complete") in MatchLive,
- * from Dec 1, 2025 onwards, and creates a pending task for them if one does not exist.
- */
+// Load ignore teams from JSON (once)
+let ignoreTeamsSet = null;
+function loadIgnoreTeams() {
+    if (!ignoreTeamsSet) {
+        const filePath = path.join(__dirname, "../config/ignoreTeams.json");
+        if (fs.existsSync(filePath)) {
+            const teams = JSON.parse(fs.readFileSync(filePath, "utf8"));
+            ignoreTeamsSet = new Set(teams);
+        } else {
+            ignoreTeamsSet = new Set();
+            console.warn("⚠️ No ignoreTeams.json found – no teams will be ignored.");
+        }
+    }
+    return ignoreTeamsSet;
+}
+
 async function generatePendingTasks() {
     try {
-        const dec1 = new Date("2025-12-20T00:00:00Z");
-        // Find all completed matches in MatchLive from Dec 1, 2025
+        const startDate = new Date("2025-12-20T00:00:00Z");
+        const ignoreTeams = loadIgnoreTeams();
+        console.log(`Ignoring ${ignoreTeams.size} teams (from pre‑generated list).`);
+
         const liveMatches = await MatchLive.find({
             result: "Complete",
-            date: { $gte: dec1 }
+            date: { $gte: startDate }
         });
 
         let created = 0;
+        let skipped = 0;
 
         for (const liveMatch of liveMatches) {
             const match = await Match.findOne({ matchId: liveMatch.matchId });
-            // Check if a pending task already exists for this match
+            if (!match) {
+                console.warn(`⚠️ No Match document for ${liveMatch.matchId}, skipping`);
+                skipped++;
+                continue;
+            }
+
+            const homeTeam = match.teamHomeName?.toLowerCase();
+            const awayTeam = match.teamAwayName?.toLowerCase();
+
+            if ((homeTeam && ignoreTeams.has(homeTeam)) || (awayTeam && ignoreTeams.has(awayTeam))) {
+                console.log(`⏭️ Skipping ${liveMatch.matchId} – team in ignore list`);
+                skipped++;
+                continue;
+            }
+
             const existingTask = await Task.findOne({ matchId: liveMatch.matchId });
             if (!existingTask) {
                 await Task.create({
@@ -29,19 +60,16 @@ async function generatePendingTasks() {
                     year: match.date.getFullYear(),
                     teamHomeName: match.teamHomeName,
                     createdAt: new Date(),
-                    // Add other fields as needed
                 });
                 created++;
             }
         }
-
-        console.log(`✅ Generated ${created} pending tasks for completed matches from Dec 1, 2025.`);
+        console.log(`✅ Generated ${created} tasks (skipped ${skipped}).`);
     } catch (err) {
-        console.error("❌ Error generating pending tasks:", err);
+        console.error("❌ Error:", err);
     }
 }
 
-// Run if executed directly
 if (require.main === module) {
     generatePendingTasks().then(() => process.exit());
 }

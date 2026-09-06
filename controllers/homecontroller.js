@@ -1102,7 +1102,7 @@ router.get("/allmatchese", async (req, res) => {
 router.get("/allmatches", async (req, res) => {
   try {
     var start = new Date();
-    start.setMonth(start.getMonth() - 100000);
+    start.setMonth(start.getMonth() - 1);
     start.setUTCHours(0, 0, 0, 0);
     var end = new Date();
     end.setUTCHours(23, 59, 59, 999);
@@ -1174,13 +1174,14 @@ router.get("/alllivematches", async (req, res) => {
 router.get("/allmatches", async (req, res) => {
   try {
     // Pagination inputs
+    console.log('Fetching matches with pagination');
     let page = parseInt(req.query.page) || 1;
     let limit = parseInt(req.query.limit) || 20;
     let skip = (page - 1) * limit;
 
     // Date filter
     var start = new Date();
-    start.setMonth(start.getMonth() - 100000);
+    start.setMonth(start.getMonth() - 1);
     start.setUTCHours(0, 0, 0, 0);
 
     console.log("Fetching matches page:", page);

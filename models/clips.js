@@ -71,6 +71,10 @@ const clipSchema = new mongoose.Schema({
     variation: { type: String, default: 'normal', enum: ['normal', 'slow', 'fast'] },
     wicketType: { type: String, enum: ['bowled', 'caught', 'caught_bowled', 'runout', 'stumped', 'lbw', 'hitwicket', 'obstructingthefield', 'retiredhurt', 'timedout', 'keeperCatch'] }
   },
+  missingClip: {
+    type: Boolean,
+    default: false
+  },
   createdAt: { type: Date, default: Date.now }
 });
 

@@ -94,11 +94,13 @@ module.exports.addLivecommentaryMongo = async function addcommentry(format) {
                 }
             });
         }
-
+        const teams = await Clip.distinct("batting_team");
+        //console.log(teams, teams.length, "teams")
+        matches = await Matches.find({ teamHomeCode: { $in: teams } })
         const m = matches;
         //console.log(m.length, "cricket allmatches");
         for (let i = 0; i < matches.length; i++) {
-            const match = await MatchLiveDetails.findOne({ matchId: matches[i].matchId });
+            const match = await MatchLiveDetails.findOne({ matchId: matches[i].matchId, status: undefined });
             //console.log(match?.isInPlay, 'the match')
             const livecommentary = await MatchLiveCommentary.findOne({ matchId: match?.matchId })
             if (!match || (!match?.isInPlay)) continue

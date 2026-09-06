@@ -11,6 +11,8 @@ const { default: mongoose } = require("mongoose");
 const NewPayment = require("../models/newPayment");
 const Withdraw = require("../models/withdraw");
 const Transaction = require("../models/transaction");
+const Clip = require("../models/clips");
+const Playlist = require("../models/playlist").default || require("../models/playlist");
 
 const router = express.Router();
 
@@ -428,5 +430,103 @@ router.post("/withdraw", async (req, res) => {
   }
 });
 
+
+// GET dashboard stats + user list (admin only)
+router.get('/user-stats', async (req, res) => {
+  try {
+    const { page = 1, limit = 10, search = '', role = '' } = req.query;
+    const query = {};
+    if (search) {
+      query.$or = [
+        { username: { $regex: search, $options: 'i' } },
+        { email: { $regex: search, $options: 'i' } },
+        { phonenumber: { $regex: search, $options: 'i' } }
+      ];
+    }
+    if (role) query.role = role;
+    query.appType = 'cricketclips';
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const users = await User.find(query).skip(skip).limit(parseInt(limit)).lean();
+    console.log(users, "users");
+    // For each user, get playlist count and clip count (optional)
+    const userIds = users.map(u => u._id);
+    const playlistCounts = await Playlist.aggregate([
+      { $match: { createdBy: { $in: userIds } } },
+      { $group: { _id: '$createdBy', count: { $sum: 1 } } }
+    ]);
+    const clipCounts = await Clip.aggregate([
+      { $match: { uploadedBy: { $in: userIds } } },
+      { $group: { _id: '$uploadedBy', count: { $sum: 1 } } }
+    ]);
+
+    const playlistMap = Object.fromEntries(playlistCounts.map(p => [p._id.toString(), p.count]));
+    const clipMap = Object.fromEntries(clipCounts.map(c => [c._id.toString(), c.count]));
+
+    const usersWithStats = users.map(user => ({
+      ...user,
+      playlistCount: playlistMap[user._id.toString()] || 0,
+      clipCount: clipMap[user._id.toString()] || 0,
+      // Determine active: lastActive within last 30 days
+      isActive: user.lastActive ? (new Date() - user.lastActive) < 30 * 24 * 60 * 60 * 1000 : false
+    }));
+
+    const total = await User.countDocuments(query);
+    const activeCount = await User.countDocuments({ lastActive: { $gt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } });
+    const totalPlaylists = await Playlist.countDocuments();
+    const totalClips = await Clip.countDocuments();
+
+    res.json({
+      success: true,
+      users: usersWithStats,
+      total,
+      page: parseInt(page),
+      totalPages: Math.ceil(total / limit),
+      stats: {
+        totalUsers: total,
+        activeUsers: activeCount,
+        totalPlaylists,
+        totalClips
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// UPDATE user (role, wallet, verified, etc.) – admin only
+router.put('/update-user/:id', async (req, res) => {
+  try {
+    const { role, verified, wallet, username, phonenumber } = req.body;
+    const user = await User.findById(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    if (role) user.role = role;
+    if (verified !== undefined) user.verified = verified;
+    if (wallet !== undefined) user.wallet = wallet;
+    if (username) user.username = username;
+    if (phonenumber) user.phonenumber = phonenumber;
+    await user.save();
+
+    const updated = await User.findById(req.params.id).select('-password');
+    res.json({ success: true, user: updated });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// DELETE user – admin only
+router.delete('/delete-user/:id', async (req, res) => {
+  try {
+    const user = await User.findByIdAndDelete(req.params.id);
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+    // Optionally delete their playlists and clips
+    await Playlist.deleteMany({ createdBy: req.params.id });
+    await Clip.deleteMany({ uploadedBy: req.params.id });
+    res.json({ success: true, message: 'User and associated data deleted' });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 module.exports = router;

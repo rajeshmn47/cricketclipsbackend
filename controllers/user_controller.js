@@ -1,7 +1,7 @@
 const express = require("express");
 const jwt = require("jsonwebtoken");
 const router = express.Router();
-const activatekey = "accountactivatekey123";
+const activatekey = process.env.activatekey;
 const nodemailer = require("nodemailer");
 const request = require("request");
 const smtpTransport = require("nodemailer-smtp-transport");
@@ -501,6 +501,7 @@ router.post("/registerold", async (req, res) => {
   user1.email = req.body.email;
   user1.password = req.body.password;
   user1.phonenumber = req.body.phoneNumber;
+  user1.appType = req.body.appType || "dream11";
   user1.wallet = 0;
   user1.otp = otp;
   const config = await Config.findOne({});
@@ -867,7 +868,7 @@ The ${name} Team`,
       await user1.save();
       const userid = user1._id;
       const token = jwt.sign({ userid }, activatekey, {
-        expiresIn: "500m",
+        expiresIn: "100m",
       });
 
       res.status(200).json({
@@ -1164,7 +1165,7 @@ router.post("/logine", async (req, res) => {
     if (user.password == req.body.myform.password) {
       const userid = user._id;
       const token = jwt.sign({ userid }, activatekey, {
-        expiresIn: "50000000m",
+        expiresIn: "50m",
       });
       res.status(200).json({
         message: "success",

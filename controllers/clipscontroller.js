@@ -11,11 +11,14 @@ const Match = require("../models/match");
 const MatchLiveDetails = require("../models/matchlive");
 const { getInningsClipCount } = require("../utils/helpers");
 const { type } = require("os");
+const { addPlayerHands } = require("../helperfunctions/updateClips");
+const { checkloggedinadmin } = require("../utils/checkUser");
+const { checkloggedinuser } = require("../utils/checkUser");
 
 const router = express.Router();
 
 // ✅ CREATE a single clip
-router.post("/create", async (req, res) => {
+router.post("/create", checkloggedinadmin, async (req, res) => {
     try {
         const clip = new Clip(req.body);
         const savedClip = await clip.save();
@@ -65,6 +68,7 @@ router.get("/allclips", async (req, res) => {
             comesDown,
             powerplay,
             isCleanBowled,
+            durationRange,
             isLBW,
             isStumping,
             isRunout,
@@ -132,6 +136,11 @@ router.get("/allclips", async (req, res) => {
         if (battingHand) filter.battingHand = { $regex: battingHand, $options: "i" };
         if (bowlingHand) filter.bowlingHand = { $regex: bowlingHand, $options: "i" };
         if (bowlerType) filter.bowlerType = { $regex: bowlerType, $options: "i" };
+        if (durationRange) {
+            let min = durationRange.split("-")[0];
+            let max = durationRange.split("-")[1];
+            filter.duration = { $gte: parseFloat(min), $lte: parseFloat(max) };
+        }
 
         // Labels filters
         if (shotType) filter["labels.shotType"] = { $regex: `^${shotType}$`, $options: "i" };
@@ -189,14 +198,31 @@ router.get("/allclips", async (req, res) => {
         if (event) {
             filter.event = { $regex: event, $options: "i" };
         }
+        filter.missingClip = false; // Only include clips that are not marked as missing
 
         // Pagination
         const skip = (parseInt(page) - 1) * parseInt(limit);
-        const sortOrder = sort === "asc" ? 1 : -1;
+        let sortOrder = {};
 
-        // Fetch clips
+        if (req.query.sortBy) {
+            const sortBy = req.query.sortBy;
+            switch (sortBy) {
+                case 'createdAt_asc': sortOrder = { createdAt: 1 }; break;
+                case 'createdAt_desc': sortOrder = { createdAt: -1 }; break;
+                case 'duration_asc': sortOrder = { duration: 1 }; break;
+                case 'duration_desc': sortOrder = { duration: -1 }; break;
+                case 'over_asc': sortOrder = { over: 1 }; break;
+                case 'event_asc': sortOrder = { event: 1 }; break;
+                default: sortOrder = { createdAt: -1 };
+            }
+        } else {
+            // legacy 'sort' parameter (default desc)
+            const sortLegacy = sort === 'asc' ? 1 : -1;
+            sortOrder = { createdAt: sortLegacy };
+        }
+        console.log(filter, req.query, sortOrder, 'final filter and sort');
         const clips = await Clip.find(filter)
-            .sort({ createdAt: sortOrder })
+            .sort(sortOrder)
             .skip(skip)
             .limit(parseInt(limit));
 
@@ -230,7 +256,7 @@ router.get("/getclip/:id", async (req, res) => {
 
 router.get("/getmatchclips/:id", async (req, res) => {
     try {
-        const clip = await Clip.find({ matchId: req.params.id });
+        const clip = await Clip.find({ matchId: req.params.id, missingClip: false });
         if (!clip) return res.status(404).json({ error: "Clip not found" });
         res.json(clip);
     } catch (err) {
@@ -238,8 +264,9 @@ router.get("/getmatchclips/:id", async (req, res) => {
     }
 });
 
-router.get("/matches", async (req, res) => {
+router.get("/matches", checkloggedinuser, async (req, res) => {
     try {
+        console.log(req.query, "query")
         const {
             seriesId,
             series,
@@ -322,7 +349,7 @@ router.get("/matches", async (req, res) => {
                 const m = allMatches[i];
                 m.matchlive = await MatchLiveDetails.findOne({ matchId: m.matchId });
                 const matchIdVal = m.matchId === undefined || m.matchId === null ? null : String(m.matchId);
-                m.clipsCount = matchIdVal ? await Clip.countDocuments({ matchId: matchIdVal, ...Object.fromEntries(Object.entries(filter).filter(([k]) => k.startsWith("labels."))) }) : 0;
+                m.clipsCount = matchIdVal ? await Clip.countDocuments({ matchId: matchIdVal, missingClip: false }) : 0;
                 let label = await getInningsClipCount(matchIdVal, { ...Object.fromEntries(Object.entries(filter).filter(([k]) => k.startsWith("labels."))) })
                 m.clipsLabel = label.label;
             }
@@ -330,13 +357,14 @@ router.get("/matches", async (req, res) => {
             matches = allMatches
         } else {
             // normal DB pagination (sorted by date)
-            matches = await Matches.find(filter).sort(sortSpec).skip(skip).limit(pageSize).lean();
+            matches = await Matches.find(filter).sort(sortSpec).lean();
+            console.log(matches.length, "matches");
             for (let i = 0; i < matches.length; i++) {
                 const m = matches[i];
                 m.matchlive = await MatchLiveDetails.findOne({ matchId: m.matchId });
                 const matchIdVal = m.matchId === undefined || m.matchId === null ? null : String(m.matchId);
                 const labelFilters = Object.fromEntries(Object.entries(filter).filter(([k]) => k.startsWith("labels.")));
-                m.clipsCount = matchIdVal ? await Clip.countDocuments({ matchId: matchIdVal, ...labelFilters }) : 0;
+                m.clipsCount = matchIdVal ? await Clip.countDocuments({ matchId: matchIdVal, missingClip: false }) : 0;
                 let label = await getInningsClipCount(matchIdVal, {})
                 m.clipsLabel = label.label;
             }
@@ -388,7 +416,7 @@ router.get("/matches", async (req, res) => {
 });
 
 // ✅ UPDATE a clip
-router.put("/update-clip/:id", async (req, res) => {
+router.put("/update-clip/:id", checkloggedinadmin, async (req, res) => {
     try {
         const updatedClip = await Clip.findByIdAndUpdate(req.params.id, req.body, {
             new: true,
@@ -401,7 +429,7 @@ router.put("/update-clip/:id", async (req, res) => {
 });
 
 // ✅ DELETE a clip
-router.delete("/delete-clip/:id", async (req, res) => {
+router.delete("/delete-clip/:id", checkloggedinadmin, async (req, res) => {
     try {
         const clip = await Clip.findByIdAndDelete(req.params.id);
         if (!clip) return res.status(404).json({ error: "Clip not found" });
@@ -418,7 +446,7 @@ router.delete("/delete-clip/:id", async (req, res) => {
 });
 
 // ✅ BULK INSERT (from earlier)
-router.post("/bulk-insert", async (req, res) => {
+router.post("/bulk-insert", checkloggedinadmin, async (req, res) => {
     try {
         // Accept either raw array or { clips: [...] }
         const raw = Array.isArray(req.body) ? req.body : req.body.clips;
@@ -455,7 +483,7 @@ router.post("/bulk-insert", async (req, res) => {
     }
 });
 
-router.post("/delete-multiple", async (req, res) => {
+router.post("/delete-multiple", checkloggedinadmin, async (req, res) => {
     try {
         const { clips } = req.body;
 
@@ -689,11 +717,12 @@ router.get("/all_clips", async (req, res) => {
         if (catchBy) filter["labels.catchBy"] = { $regex: catchBy, $options: "i" };
         if (caughtBy) filter["labels.catchBy"] = { $regex: caughtBy, $options: "i" };
         if (stumpedBy) filter["labels.stumpedBy"] = { $regex: stumpedBy, $options: "i" };
-
+        filter.missingClip = false; // Only include clips that are not marked as missing
         // Pagination
         const skip = (parseInt(page) - 1) * parseInt(limit);
 
         // Fetch clips
+        console.log(filter, 'final filter')
         const clips = await Clip.find(filter)
             .sort({ createdAt: sort === "asc" ? 1 : -1 })
             .skip(skip)
@@ -715,9 +744,154 @@ router.get("/all_clips", async (req, res) => {
     }
 });
 
+router.post("/rename-name", async (req, res) => {
+    try {
+        const { type, oldName, newName } = req.body;
+        if (!type || !oldName || !newName) {
+            return res.status(400).json({ message: "Missing fields" });
+        }
+        if (type !== 'batsman' && type !== 'bowler') {
+            return res.status(400).json({ message: "Type must be 'batsman' or 'bowler'" });
+        }
+
+        const updateField = type === 'batsman' ? 'batsman' : 'bowler';
+        const result = await Clip.updateMany(
+            { [updateField]: oldName },
+            { $set: { [updateField]: newName } }
+        );
+
+        res.status(200).json({
+            message: `Renamed ${result.modifiedCount} clips`,
+            modifiedCount: result.modifiedCount
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+router.get("/unique-names", async (req, res) => {
+    try {
+        const { league, includeMissing } = req.query;
+        const filter = {};
+        if (league) filter.league = league;
+
+        // ----- 1. Aggregations for distinct names (for problematic detection) -----
+        const batsmenAgg = await Clip.aggregate([
+            { $match: { ...filter, batsman: { $exists: true, $ne: "" } } },
+            { $group: { _id: "$batsman", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $project: { name: "$_id", count: 1, _id: 0 } }
+        ]);
+
+        const bowlersAgg = await Clip.aggregate([
+            { $match: { ...filter, bowler: { $exists: true, $ne: "" } } },
+            { $group: { _id: "$bowler", count: { $sum: 1 } } },
+            { $sort: { count: -1 } },
+            { $project: { name: "$_id", count: 1, _id: 0 } }
+        ]);
+
+        // ----- 2. Problematic name detection (single‑word or initial) -----
+        const isProblematic = (name) => {
+            const trimmed = name.trim();
+            if (!trimmed) return false;
+            if (trimmed.includes('-')) return false;
+            if (trimmed.includes('.') && trimmed.split(/\s+/).length > 1) return false;
+            const parts = trimmed.split(/\s+/);
+            if (parts.length === 1) return true;
+            if (parts[0].length === 1) return true;
+            return false;
+        };
+
+        let batsmen = batsmenAgg.filter(item => isProblematic(item.name));
+        let bowlers = bowlersAgg.filter(item => isProblematic(item.name));
+
+        // ----- 3. Optionally include players with proper names but missing hand data -----
+        if (includeMissing === "true") {
+            // Bowlers: include those missing bowlingHand or bowlerType
+            const allBowlers = await Clip.distinct("bowler", filter);
+            for (const name of allBowlers) {
+                if (bowlers.some(b => b.name === name)) continue; // already listed
+                const player = await Player.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+                if (player && (!player.bowlingHand || !player.bowlerType)) {
+                    const count = await Clip.countDocuments({ bowler: name, ...filter });
+                    bowlers.push({ name, count });
+                }
+            }
+            // Batsmen: include those missing battingHand
+            const allBatsmen = await Clip.distinct("batsman", filter);
+            for (const name of allBatsmen) {
+                if (batsmen.some(b => b.name === name)) continue;
+                const player = await Player.findOne({ name: { $regex: new RegExp(`^${name}$`, 'i') } });
+                if (player && !player.battingHand) {
+                    const count = await Clip.countDocuments({ batsman: name, ...filter });
+                    batsmen.push({ name, count });
+                }
+            }
+        }
+
+        res.json({ batsmen, bowlers });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+router.post('/update-clip-hands', async (req, res) => {
+    try {
+        await addPlayerHands(); // your existing function
+        res.status(200).json({ message: 'Clip hands updated successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: err.message });
+    }
+});
+
+// POST /api/clips/flag
+router.post("/flag", async (req, res) => {
+    try {
+        const { clipId, reason, description } = req.body;
+
+        if (!clipId) {
+            return res.status(400).json({ error: "clipId is required" });
+        }
+
+        // Find the clip by ID
+        const clip = await Clip.findById(clipId);
+        if (!clip) {
+            return res.status(404).json({ error: "Clip not found" });
+        }
+
+        // Update the flag field according to your schema
+        clip.flag = {
+            isFlagged: true,
+            reason: reason || "manual",
+            details: description || "",
+            conflictFields: [],
+            flaggedAt: new Date(),
+            reviewStatus: "pending",
+            reviewedAt: null,
+            reviewNotes: ""
+        };
+
+        await clip.save();
+
+        res.json({
+            success: true,
+            message: "Clip flagged successfully",
+            clipId: clip._id
+        });
+    } catch (err) {
+        console.error("Error flagging clip:", err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 router.get("/all_players", async (req, res) => {
     try {
-        const players = await Player.find();
+        const batsman = await Clip.distinct("batsman", {})
+        const bowler = await Clip.distinct("bowler", {})
+        const players = [...batsman, ...bowler]
         res.json(players);
     } catch (err) {
         res.status(500).json({ error: err.message });
@@ -731,24 +905,12 @@ router.get("/series/completed", async (req, res) => {
             ballType, shotType, direction, lengthType, connection, slowball, lofted, comesDown, powerplay,
             season, fromDate, type, format, name, toDate, page = 1, limit = 20, perClipLimit = 3, includeClips = "false"
         } = req.query;
-
+        console.log(req.query, "a query")
         const pageNum = Math.max(1, parseInt(page, 10));
         const pageSize = Math.max(1, parseInt(limit, 10));
         const skip = (pageNum - 1) * pageSize;
         const include = includeClips === "true";
         const perLimit = Math.max(1, parseInt(perClipLimit, 10));
-
-        // Label filters for clips
-        const labelFilters = {};
-        if (ballType) labelFilters["labels.ballType"] = { $regex: ballType, $options: "i" };
-        if (shotType) labelFilters["labels.shotType"] = { $regex: shotType, $options: "i" };
-        if (direction) labelFilters["labels.direction"] = { $regex: direction, $options: "i" };
-        if (lengthType) labelFilters["labels.lengthType"] = { $regex: lengthType, $options: "i" };
-        if (connection) labelFilters["labels.connection"] = { $regex: connection, $options: "i" };
-        if (slowball) labelFilters["labels.slowball"] = { $regex: slowball, $options: "i" };
-        if (comesDown) labelFilters["labels.comesDown"] = { $regex: comesDown, $options: "i" };
-        if (powerplay) labelFilters["labels.powerplay"] = { $regex: powerplay, $options: "i" };
-        if (lofted !== undefined) labelFilters["labels.lofted"] = lofted === "true";
 
         // Only completed and important series
         const now = new Date();
@@ -802,7 +964,7 @@ router.get("/series/completed", async (req, res) => {
             // Count clips for this series (with label filters)
             const clipsCount = await Clip.countDocuments({
                 matchId: { $in: matchIds },
-                ...labelFilters
+                missingClip: false
             });
 
             // Optionally include sample clips
@@ -810,7 +972,7 @@ router.get("/series/completed", async (req, res) => {
             if (include && clipsCount > 0) {
                 clips = await Clip.find({
                     matchId: { $in: matchIds },
-                    ...labelFilters
+                    missingClip: false
                 })
                     .sort({ createdAt: -1 })
                     .limit(perLimit)
@@ -828,7 +990,7 @@ router.get("/series/completed", async (req, res) => {
 
             // Add array of matches with matchId, type, and number of clips for each match
             const matchesArray = await Promise.all(matches.map(async (m) => {
-                const numClips = await Clip.countDocuments({ matchId: String(m.matchId), ...labelFilters });
+                const numClips = await Clip.countDocuments({ matchId: String(m.matchId), missingClip: false });
                 return {
                     matchId: m.matchId,
                     type: m.format,
@@ -874,15 +1036,36 @@ router.post("/playlists/create", async (req, res) => {
 });
 
 // Get all playlists (optionally filter by user)
-router.get("/playlists/all", async (req, res) => {
+router.get("/playlists/all", checkloggedinuser, async (req, res) => {
     try {
         const filter = {};
-        if (req.query.createdBy) filter.createdBy = req.query.createdBy;
-        const playlists = await Playlist.find(filter)
-            .populate("createdBy", "username")
-            .populate("videos") // Populate the videos/clips field with full objects
-            .sort({ createdAt: -1 });
-        res.json(playlists);
+        if (req.body.uidfromtoken) {
+            filter.createdBy = req.body.uidfromtoken;
+            const playlists = await Playlist.find(filter)
+                .populate("createdBy", "username")
+                .populate("videos") // Populate the videos/clips field with full objects
+                .sort({ createdAt: -1 });
+            res.json(playlists);
+        }
+        else {
+            res.json([]);
+        }
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// Get all playlists (optionally filter by user)
+router.get("/publicplaylists", checkloggedinuser, async (req, res) => {
+    try {
+        const filter = {};
+        if (req.body.uidfromtoken) {
+            const playlists = await Playlist.find({ isPublic: true })
+            res.json(playlists);
+        }
+        else {
+            res.json([]);
+        }
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
@@ -952,6 +1135,44 @@ router.post("/playlists/:id/remove-video", async (req, res) => {
         res.json(playlist);
     } catch (err) {
         res.status(400).json({ error: err.message });
+    }
+});
+
+// POST /clips/bulk-update
+router.post('/bulk-update', checkloggedinadmin, async (req, res) => {
+    try {
+        const { ids, updates } = req.body;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({ success: false, message: 'No clip IDs provided' });
+        }
+
+        // Build update object – only include fields that are provided
+        const updateFields = {};
+        if (updates.hasOwnProperty('flagged')) updateFields['flag.isFlagged'] = updates.flagged;
+        if (updates.hasOwnProperty('flagReason')) updateFields['flag.reason'] = updates.flagReason;
+        if (updates.hasOwnProperty('conflictField')) updateFields['flag.conflictFields'] = updates.conflictField;
+        if (updates.hasOwnProperty('reviewStatus')) updateFields['flag.reviewStatus'] = updates.reviewStatus;
+        if (updates.hasOwnProperty('reported')) updateFields.reported = updates.reported;
+
+        // Also allow updating labels if needed (e.g., shotType, ballType) – optional
+        if (updates.hasOwnProperty('shotType')) updateFields['labels.shotType'] = updates.shotType;
+        // ... add other fields as required
+
+        const result = await Clip.updateMany(
+            { _id: { $in: ids } },
+            { $set: updateFields },
+            { multi: true }
+        );
+
+        res.json({
+            success: true,
+            modifiedCount: result.modifiedCount,
+            message: `${result.modifiedCount} clip(s) updated`
+        });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ success: false, error: err.message });
     }
 });
 

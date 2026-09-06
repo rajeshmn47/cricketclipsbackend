@@ -53,7 +53,7 @@ module.exports.updateBalls = async function () {
             //seriesId: '10587',
             //type: "i",
             //format: "t20",
-            matchId: "123254",
+            matchId: "151954",
             date: {
                 $gte: date,
                 $lt: new Date(),

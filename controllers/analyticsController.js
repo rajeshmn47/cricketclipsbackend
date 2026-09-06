@@ -4,11 +4,13 @@ const User = require("../models/user");
 const config = require("../models/config");
 const ApiRequest = require("../models/apiRequest");
 const Clip = require("../models/clips.js");
+const partnership = require("../models/partnership.js");
+const MatchLiveDetails = require("../models/matchlive.js");
 
 const router = express.Router();
 
 // GET /api/analytics/dropped-catches
-router.get("/dropped-catches", async (req, res) => {
+router.get("/dropped-catchess", async (req, res) => {
     try {
         const { seriesId, season, format, league, player } = req.query;
 
@@ -52,6 +54,120 @@ router.get("/dropped-catches", async (req, res) => {
 
     } catch (error) {
         console.error("Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/analytics/dropped-catches
+router.get("/dropped-catches", async (req, res) => {
+    try {
+        const { seriesId, season, format, league, player, minCatches = 0 } = req.query;
+
+        const baseMatch = {};
+        if (seriesId) baseMatch.seriesId = seriesId;
+        if (season) baseMatch.season = season;
+        if (format) baseMatch.format = format;
+        if (league) baseMatch.league = league;
+
+        // ----- 1. Catches taken -----
+        const catchMatch = {
+            ...baseMatch,
+            "labels.catch": true,
+            "labels.catchBy": { $exists: true, $ne: "" }
+        };
+        if (player) catchMatch["labels.catchBy"] = { $regex: player, $options: "i" };
+
+        const catchesPipeline = [
+            { $match: catchMatch },
+            {
+                $group: {
+                    _id: "$labels.catchBy",
+                    catches: { $sum: 1 },
+                    catchMatchIds: { $addToSet: "$matchId" }
+                }
+            }
+        ];
+
+        // ----- 2. Drops -----
+        const dropMatch = {
+            ...baseMatch,
+            "labels.dropped": true,
+            "labels.droppedBy": { $exists: true, $ne: "" }
+        };
+        if (player) dropMatch["labels.droppedBy"] = { $regex: player, $options: "i" };
+
+        const dropsPipeline = [
+            { $match: dropMatch },
+            {
+                $group: {
+                    _id: "$labels.droppedBy",
+                    drops: { $sum: 1 },
+                    dropMatchIds: { $addToSet: "$matchId" }
+                }
+            }
+        ];
+
+        const [catchesResult, dropsResult] = await Promise.all([
+            Clip.aggregate(catchesPipeline),
+            Clip.aggregate(dropsPipeline)
+        ]);
+
+        // Merge results into a Map
+        const fielderMap = new Map();
+
+        catchesResult.forEach(c => {
+            fielderMap.set(c._id, {
+                fielder: c._id,
+                catches: c.catches,
+                catchMatchIds: c.catchMatchIds,
+                drops: 0,
+                dropMatchIds: []
+            });
+        });
+
+        dropsResult.forEach(d => {
+            if (fielderMap.has(d._id)) {
+                const f = fielderMap.get(d._id);
+                f.drops = d.drops;
+                f.dropMatchIds = d.dropMatchIds;
+            } else {
+                fielderMap.set(d._id, {
+                    fielder: d._id,
+                    fielderId: d.playerId,
+                    catches: 0,
+                    catchMatchIds: [],
+                    drops: d.drops,
+                    dropMatchIds: d.dropMatchIds
+                });
+            }
+        });
+
+        // Apply minCatches filter
+        let result = Array.from(fielderMap.values())
+            .filter(f => f.catches >= parseInt(minCatches))
+            .map(f => {
+                const allMatchIds = new Set([...f.catchMatchIds, ...f.dropMatchIds]);
+                const totalMatches = allMatchIds.size;
+                const totalChances = f.catches + f.drops;
+                const successRate = totalChances === 0 ? 0 : (f.catches / totalChances) * 100;
+
+                return {
+                    fielder: f.fielder,
+                    catches: f.catches,
+                    drops: f.drops,
+                    totalChances,
+                    successRate: parseFloat(successRate.toFixed(1)),
+                    matches: totalMatches,
+                    dropsPerMatch: totalMatches === 0 ? 0 : parseFloat((f.drops / totalMatches).toFixed(2))
+                };
+            });
+
+        // Sort by most catches first
+        result.sort((a, b) => b.catches - a.catches);
+        res.json(result);
+
+    } catch (error) {
+        console.error("Error in dropped-catches:", error);
         res.status(500).json({ error: error.message });
     }
 });
@@ -664,7 +780,7 @@ router.get("/boundaries-by-area", async (req, res) => {
 // GET /api/analytics/batsman-hand-type-weakness
 router.get("/batsman-hand-type-weakness", async (req, res) => {
     try {
-        const { batsman, seriesId, bowlerType,battingHand,bowlingHand, season, format, league, minBalls = 10 } = req.query;
+        const { batsman, seriesId, bowlerType, battingHand, bowlingHand, season, format, league, minBalls = 10 } = req.query;
 
         const matchConditions = {
             batsman: { $exists: true, $ne: null, $ne: "" },
@@ -682,7 +798,7 @@ router.get("/batsman-hand-type-weakness", async (req, res) => {
         if (bowlerType) matchConditions.bowlerType = bowlerType;
         if (battingHand) matchConditions.battingHand = battingHand;
         if (bowlingHand) matchConditions.bowlingHand = bowlingHand;
-        
+
         const pipeline = [
             { $match: matchConditions },
             {
@@ -808,4 +924,415 @@ router.get("/batsman-hand-type-weakness", async (req, res) => {
     }
 });
 
+// GET /api/analytics/bowler-hand-type-weakness
+router.get("/bowler-hand-type-weakness", async (req, res) => {
+    try {
+        const {
+            bowler,
+            seriesId,
+            season,
+            format,
+            league,
+            battingHand,  // filter by batsman's hand (left/right)
+            minBalls = 10
+        } = req.query;
+
+        const matchConditions = {
+            bowler: { $exists: true, $ne: null, $ne: "" },
+            batsman: { $exists: true, $ne: null, $ne: "" },
+            battingHand: { $exists: true, $ne: null, $ne: "" },
+            bowlingHand: { $exists: true, $ne: null, $ne: "" },
+            event: { $exists: true, $ne: null, $ne: "" }
+        };
+
+        if (bowler) matchConditions.bowler = { $regex: bowler, $options: "i" };
+        if (seriesId) matchConditions.seriesId = seriesId;
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (league) matchConditions.league = league;
+        if (battingHand) matchConditions.battingHand = battingHand;
+
+        const pipeline = [
+            { $match: matchConditions },
+            {
+                $addFields: {
+                    // Extract runs from 'event' field
+                    runs: {
+                        $switch: {
+                            branches: [
+                                { case: { $regexMatch: { input: "$event", regex: /six|6 runs?/i } }, then: 6 },
+                                { case: { $regexMatch: { input: "$event", regex: /four|4 runs?/i } }, then: 4 },
+                                { case: { $regexMatch: { input: "$event", regex: /3 runs?/i } }, then: 3 },
+                                { case: { $regexMatch: { input: "$event", regex: /2 runs?/i } }, then: 2 },
+                                { case: { $regexMatch: { input: "$event", regex: /1 run/ } }, then: 1 }
+                            ],
+                            default: 0
+                        }
+                    },
+                    // Detect wicket (excluding dropped catches)
+                    isWicket: {
+                        $and: [
+                            { $not: { $regexMatch: { input: "$event", regex: /dropped/i } } },
+                            { $regexMatch: { input: "$event", regex: /wicket|caught|bowled|lbw|stumped|run out/i } }
+                        ]
+                    },
+                    // Detect boundary
+                    isBoundary: {
+                        $regexMatch: { input: "$event", regex: /four|six|4 runs?|6 runs?/i }
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        bowler: "$bowler",
+                        battingHand: "$battingHand"
+                    },
+                    deliveries: { $sum: 1 },
+                    runs: { $sum: "$runs" },
+                    wickets: { $sum: { $cond: ["$isWicket", 1, 0] } },
+                    boundaries: { $sum: { $cond: ["$isBoundary", 1, 0] } }
+                }
+            },
+            {
+                $match: {
+                    deliveries: { $gte: parseInt(minBalls) }
+                }
+            },
+            {
+                $project: {
+                    bowler: "$_id.bowler",
+                    battingHand: "$_id.battingHand",
+                    deliveries: 1,
+                    runs: 1,
+                    wickets: 1,
+                    boundaries: 1,
+                    average: {
+                        $cond: [
+                            { $eq: ["$wickets", 0] },
+                            "$runs",
+                            { $divide: ["$runs", "$wickets"] }
+                        ]
+                    },
+                    economy: {
+                        $multiply: [{ $divide: ["$runs", "$deliveries"] }, 6]
+                    },
+                    strikeRate: {
+                        $cond: [
+                            { $eq: ["$wickets", 0] },
+                            0,
+                            { $multiply: [{ $divide: ["$deliveries", "$wickets"] }, 100] }
+                        ]
+                    },
+                    boundaryPercentage: {
+                        $multiply: [{ $divide: ["$boundaries", "$deliveries"] }, 100]
+                    }
+                }
+            },
+            {
+                $group: {
+                    _id: "$bowler",
+                    categories: {
+                        $push: {
+                            battingHand: "$battingHand",
+                            deliveries: "$deliveries",
+                            runs: "$runs",
+                            wickets: "$wickets",
+                            average: { $round: ["$average", 2] },
+                            economy: { $round: ["$economy", 2] },
+                            strikeRate: { $round: ["$strikeRate", 2] },
+                            boundaryPercentage: { $round: ["$boundaryPercentage", 2] }
+                        }
+                    },
+                    totalDeliveries: { $sum: "$deliveries" },
+                    totalRuns: { $sum: "$runs" },
+                    totalWickets: { $sum: "$wickets" }
+                }
+            },
+            {
+                $project: {
+                    bowler: "$_id",
+                    categories: 1,
+                    overallAverage: {
+                        $cond: [
+                            { $eq: ["$totalWickets", 0] },
+                            "$totalRuns",
+                            { $divide: ["$totalRuns", "$totalWickets"] }
+                        ]
+                    },
+                    overallEconomy: {
+                        $multiply: [{ $divide: ["$totalRuns", "$totalDeliveries"] }, 6]
+                    },
+                    overallStrikeRate: {
+                        $cond: [
+                            { $eq: ["$totalWickets", 0] },
+                            0,
+                            { $multiply: [{ $divide: ["$totalDeliveries", "$totalWickets"] }, 100] }
+                        ]
+                    }
+                }
+            },
+            { $sort: { bowler: 1 } }
+        ];
+
+        const result = await Clip.aggregate(pipeline);
+        res.json(result);
+
+    } catch (error) {
+        console.error("Error in bowler-hand-type-weakness:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/analytics/runouts
+router.get("/runouts", async (req, res) => {
+    try {
+        const { seriesId, season, format, league, player, minRunouts = 0 } = req.query;
+
+        const matchConditions = {
+            "labels.runout": true,
+            "labels.runoutBy": { $exists: true, $ne: "" }
+        };
+        if (seriesId) matchConditions.seriesId = seriesId;
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (league) matchConditions.league = league;
+        if (player) matchConditions["labels.runoutBy"] = { $regex: player, $options: "i" };
+
+        const pipeline = [
+            { $match: matchConditions },
+            {
+                $group: {
+                    _id: "$labels.runoutBy",
+                    runouts: { $sum: 1 },
+                    matches: { $addToSet: "$matchId" },
+                    uniqueBatsmen: { $addToSet: "$batsman" }   // who they ran out
+                }
+            },
+            {
+                $match: {
+                    runouts: { $gte: parseInt(minRunouts) }
+                }
+            },
+            {
+                $project: {
+                    player: "$_id",
+                    runouts: 1,
+                    matches: { $size: "$matches" },
+                    uniqueBatsmen: { $size: "$uniqueBatsmen" },
+                    runoutsPerMatch: { $divide: ["$runouts", { $size: "$matches" }] }
+                }
+            },
+            { $sort: { runouts: -1 } }
+        ];
+
+        const result = await Clip.aggregate(pipeline);
+        res.json(result);
+
+    } catch (error) {
+        console.error("Error in runouts:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/analytics/partnerships
+router.get("/partnerships", async (req, res) => {
+    try {
+        const {
+            batsman,
+            seriesId,
+            season,
+            format,
+            league,
+            minRuns = 0,
+            minBalls = 0,
+            limit = 100
+        } = req.query;
+        console.log(req.query, "qury")
+        // Build match conditions for filtering
+        const matchConditions = {};
+        if (seriesId) matchConditions.seriesId = seriesId.toString();
+        if (season) matchConditions.season = season;
+        if (format) matchConditions.format = format;
+        if (league) matchConditions.league = league;
+
+        // First, get matching matchIds from MatchLiveDetails
+        let matchIds = [];
+        if (Object.keys(matchConditions).length > 0) {
+            console.log(matchConditions, "conditions")
+            const matches = await MatchLiveDetails.find(matchConditions);
+            console.log(matches.length)
+            matchIds = matches.map(m => m.matchId);
+            if (matchIds.length === 0) return res.json([]);
+        }
+
+        // Build partnership aggregation pipeline
+        console.log(matchIds, "ids")
+        const pipeline = [
+            // Optionally filter by matchIds
+            ...(matchIds.length > 0 ? [{ $match: { matchId: { $in: matchIds } } }] : []),
+            { $unwind: "$partnerships" },
+            // Filter by batsman (if provided)
+            ...(batsman ? [{ $match: { "partnerships.batsmen": { $regex: batsman, $options: "i" } } }] : []),
+            {
+                $match: {
+                    "partnerships.runs": { $gte: parseInt(minRuns) },
+                    "partnerships.balls": { $gte: parseInt(minBalls) }
+                }
+            },
+            { $sort: { "partnerships.runs": -1 } },
+            { $limit: parseInt(limit) },
+            // Lookup match details
+            {
+                $lookup: {
+                    from: "matchlivedetails",
+                    localField: "matchId",
+                    foreignField: "matchId",
+                    as: "match"
+                }
+            },
+            { $unwind: { path: "$match", preserveNullAndEmptyArrays: true } },
+            {
+                $project: {
+                    matchId: 1,
+                    innings: 1,
+                    partnership: "$partnerships",
+                    match: {
+                        teamHomeCode: 1,
+                        teamAwayCode: 1,
+                        format: 1,
+                        season: 1,
+                        league: 1,
+                        seriesId: 1,
+                        date: 1
+                    }
+                }
+            }
+        ];
+
+        const result = await partnership.aggregate(pipeline);
+        res.json(result);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// GET /api/analytics/partnership-clips
+router.get("/partnership-clipsu", async (req, res) => {
+    try {
+        const { matchId, batsman1, batsman2, innings } = req.query;
+        const conditions = {
+            matchId: matchId,
+            batsman: { $in: [batsman1, batsman2] }
+        };
+        if (innings) conditions.innings = parseInt(innings);
+        const clips = await Clip.find(conditions)
+            .sort({ over: 1, _id: 1 })
+            .limit(100)
+            .lean();
+        res.json(clips);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET /api/analytics/partnerships
+router.get("/partnership-clips", async (req, res) => {
+    try {
+        const { batsman, seriesId, season, format, league, minRuns, minBalls } = req.query;
+
+        const pipeline = [];
+
+        // 1. Unwind the partnerships array (create one doc per partnership)
+        pipeline.push({ $unwind: "$partnerships" });
+
+        // 2. Optional: filter by batsman (case‑insensitive)
+        if (batsman && batsman !== "") {
+            pipeline.push({
+                $match: {
+                    $or: [
+                        { "partnerships.batsmen.0": { $regex: batsman, $options: "i" } },
+                        { "partnerships.batsmen.1": { $regex: batsman, $options: "i" } }
+                    ]
+                }
+            });
+        }
+
+        // 3. Lookup match details
+        pipeline.push({
+            $lookup: {
+                from: "matches",          // your Match collection name
+                localField: "matchId",
+                foreignField: "matchId",
+                as: "matchInfo"
+            }
+        });
+
+        pipeline.push({ $unwind: { path: "$matchInfo", preserveNullAndEmptyArrays: false } });
+
+        // 4. Apply match filters (seriesId, season, format, league)
+        const matchFilters = {};
+        if (seriesId && seriesId !== "all") matchFilters["matchInfo.seriesId"] = seriesId;
+        if (season && season !== "") matchFilters["matchInfo.season"] = season;
+        if (format && format !== "") matchFilters["matchInfo.format"] = format;
+        if (league && league !== "") matchFilters["matchInfo.league"] = league;
+
+        if (Object.keys(matchFilters).length > 0) {
+            pipeline.push({ $match: matchFilters });
+        }
+
+        // 5. Apply runs and balls filters
+        pipeline.push({
+            $match: {
+                "partnerships.runs": { $gte: parseInt(minRuns) || 0 },
+                "partnerships.balls": { $gte: parseInt(minBalls) || 0 }
+            }
+        });
+
+        // 6. Add vs field and reorganize the output
+        pipeline.push({
+            $addFields: {
+                vs: {
+                    $concat: [
+                        { $ifNull: ["$matchInfo.teamHomeCode", "?"] },
+                        " vs ",
+                        { $ifNull: ["$matchInfo.teamAwayCode", "?"] }
+                    ]
+                },
+                match: {
+                    teamHomeCode: "$matchInfo.teamHomeCode",
+                    teamAwayCode: "$matchInfo.teamAwayCode",
+                    format: "$matchInfo.format",
+                    date: "$matchInfo.date",
+                    seriesId: "$matchInfo.seriesId",
+                    season: "$matchInfo.season"
+                },
+                // Rename partnership sub‑field to "partnership" (singular) for frontend convenience
+                partnership: "$partnerships"
+            }
+        });
+
+        // 7. Optional: remove fields you don't need
+        pipeline.push({
+            $project: {
+                partnerships: 0,       // remove the original array
+                matchInfo: 0          // remove the raw lookup data
+            }
+        });
+
+        // 8. Sort and limit
+        pipeline.push(
+            { $sort: { "partnership.runs": -1 } },
+            { $limit: 500 }
+        );
+
+        const partnerships = await partnership.aggregate(pipeline);
+        res.json(partnerships);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: err.message });
+    }
+});
 module.exports = router;
