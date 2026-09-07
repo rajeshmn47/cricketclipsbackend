@@ -71,4 +71,5 @@ playlistSchema.pre("save", function(next) {
   next();
 });
 
-export default mongoose.model("Playlist", playlistSchema);
+const Playlist = mongoose.model("Playlist", playlistSchema);
+module.exports = Playlist;
