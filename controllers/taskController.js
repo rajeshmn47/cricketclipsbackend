@@ -6,11 +6,11 @@ const Match = require("../models/match");
 const Series = require("../models/series");
 const { runPipeline } = require("../updating/generateClips");
 const Clip = require("../models/clips");
-const { generateLabelsMatch } = require("../helperfunctions/generateLabels_match");
-const { addPlayerHandsMatch } = require("../helperfunctions/updateClips_match");
+const { generateLabelsMatch } = require("../helpers/generateLabels_match");
+const { addPlayerHandsMatch } = require("../helpers/updateClips_match");
 const { moveTodayClips } = require("../utils/helpers");
 const Config = require("../models/config");
-const { findingmatchkeeper } = require("../helperfunctions/findingmatchkeeper");
+const { findingmatchkeeper } = require("../helpers/findingmatchkeeper");
 
 const router = express.Router();
 

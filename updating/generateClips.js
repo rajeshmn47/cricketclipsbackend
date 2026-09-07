@@ -3,8 +3,8 @@ const { exec } = require("child_process");
 const { spawn } = require("child_process");
 const Task = require("../models/task");
 const { createMatchesList } = require("../utils/createMatches");
-const { generateLabels } = require("../helperfunctions/generateLabels");
-const { addPlayerHands } = require("../helperfunctions/updateClips");
+const { generateLabels } = require("../helpers/generateLabels");
+const { addPlayerHands } = require("../helpers/updateClips");
 const Config = require("../models/config");
 const fs = require("fs");
 

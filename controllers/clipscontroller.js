@@ -11,7 +11,7 @@ const Match = require("../models/match");
 const MatchLiveDetails = require("../models/matchlive");
 const { getInningsClipCount } = require("../utils/helpers");
 const { type } = require("os");
-const { addPlayerHands } = require("../helperfunctions/updateClips");
+const { addPlayerHands } = require("../helpers/updateClips");
 const { checkloggedinadmin } = require("../utils/checkUser");
 const { checkloggedinuser } = require("../utils/checkUser");
 
