@@ -13,18 +13,18 @@ const fs = require("fs");
 const ffmpeg = require('fluent-ffmpeg');
 const { exec } = require('child_process');
 const util = require('util');
-const execPromise = util.promisify(exec);
-const transaction = require("../updating/transaction_details_controller");
-const User = require("../models/user");
-const { messaging } = require("../utils/firebaseinitialize");
 const axios = require("axios");
+const execPromise = util.promisify(exec);
+const User = require("../models/user");
 const Config = require("../models/config");
-const clips = require('../overs_with_clips_wi.json');
 const Clip = require("../models/clips");
-//const folderPath = "./clips_folder"; // change to your actual folder path
-const folderPath = "./latest"
 const Transaction = require("../models/transaction");
 const NewPayment = require("../models/newPayment");
+const transaction = require("../updating/transaction_details_controller");
+const { messaging } = require("../utils/firebaseinitialize");
+//const clips = require('../overs_with_clips_wi.json');
+//const folderPath = "./clips_folder"; // change to your actual folder path
+const folderPath = "./latest"
 
 const transporter = nodemailer.createTransport(
   smtpTransport({
@@ -1165,7 +1165,7 @@ router.post("/logine", async (req, res) => {
     if (user.password == req.body.myform.password) {
       const userid = user._id;
       const token = jwt.sign({ userid }, activatekey, {
-        expiresIn: "50m",
+        expiresIn: "500000m",
       });
       res.status(200).json({
         message: "success",
